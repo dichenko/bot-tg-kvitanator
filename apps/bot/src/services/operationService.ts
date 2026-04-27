@@ -5,9 +5,10 @@ import type { EntrepreneurProfile, Operation, Service, User } from "@receipt-bot
 import { PAYMENT_METHOD_LABELS } from "@receipt-bot/shared";
 import type { Logger } from "pino";
 import { config } from "../config";
+import { mainMenuKeyboard } from "../keyboards";
 import type { BotContext, ReceiptDraft } from "../types";
 import { formatAmount, formatDateTime, formatPaymentMethod, formatOperationStatus } from "../utils/formatters";
-import { escapeTelegramHtml } from "../utils/telegram";
+import { escapeTelegramHtml, sendMenu } from "../utils/telegram";
 import { renderReceipt } from "./rendererClient";
 
 const createTemporaryReceiptNumber = (): string =>
@@ -211,6 +212,8 @@ export const renderAndSendOperation = async (
         sentAt: new Date()
       }
     });
+
+    await sendMenu(ctx, "Главное меню", mainMenuKeyboard());
 
     logger.info({ operationId: operation.id, imagePath: renderResult.imagePath }, "Render success");
   } catch (error) {
