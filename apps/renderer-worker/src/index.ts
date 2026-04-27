@@ -1,4 +1,3 @@
-import "dotenv/config";
 import express from "express";
 import type { RenderReceiptRequest } from "@receipt-bot/shared";
 import { z } from "zod";

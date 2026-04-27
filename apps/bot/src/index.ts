@@ -1,4 +1,3 @@
-import "dotenv/config";
 import express from "express";
 import { webhookCallback } from "grammy";
 import { prisma } from "@receipt-bot/db";
