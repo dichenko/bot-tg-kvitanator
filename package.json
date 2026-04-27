@@ -1,0 +1,13 @@
+{
+  "name": "receipt-bot",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.11.0",
+  "scripts": {
+    "build": "pnpm -r build",
+    "postinstall": "pnpm prisma:generate",
+    "prisma:generate": "pnpm --filter @receipt-bot/db exec prisma generate --schema prisma/schema.prisma",
+    "prisma:migrate:dev": "pnpm --filter @receipt-bot/db exec prisma migrate dev --schema prisma/schema.prisma",
+    "prisma:migrate:deploy": "pnpm --filter @receipt-bot/db exec prisma migrate deploy --schema prisma/schema.prisma"
+  }
+}

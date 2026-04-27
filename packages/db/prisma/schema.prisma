@@ -1,0 +1,114 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+}
+
+enum OperationStatus {
+  DRAFT
+  CONFIRMED
+  RENDERING
+  RENDERED
+  SENT
+  FAILED
+  DELETED
+}
+
+enum RenderJobStatus {
+  PENDING
+  PROCESSING
+  DONE
+  FAILED
+}
+
+model User {
+  id          Int                  @id @default(autoincrement())
+  telegramId  BigInt               @unique
+  username    String?              @db.VarChar(64)
+  firstName   String?              @db.VarChar(128)
+  lastName    String?              @db.VarChar(128)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  profile     EntrepreneurProfile?
+  services    Service[]
+  operations  Operation[]
+
+  @@map("users")
+}
+
+model EntrepreneurProfile {
+  id         Int       @id @default(autoincrement())
+  userId     Int       @unique
+  inn        String    @db.VarChar(12)
+  ipFullName String    @db.VarChar(255)
+  address    String    @db.VarChar(255)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  operations Operation[]
+
+  @@map("entrepreneur_profiles")
+}
+
+model Service {
+  id         Int         @id @default(autoincrement())
+  userId     Int
+  title      String      @db.VarChar(160)
+  isActive   Boolean     @default(true)
+  createdAt  DateTime    @default(now())
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  operations Operation[]
+
+  @@index([userId, isActive])
+  @@map("services")
+}
+
+model Operation {
+  id                   Int                @id @default(autoincrement())
+  userId               Int
+  profileId            Int
+  serviceId            Int?
+  receiptNumber        String             @db.VarChar(32)
+  innSnapshot          String             @db.VarChar(12)
+  ipFullNameSnapshot   String             @db.VarChar(255)
+  addressSnapshot      String             @db.VarChar(255)
+  serviceTitleSnapshot String             @db.VarChar(160)
+  amount               Decimal            @db.Decimal(12, 2)
+  paymentMethod        PaymentMethod
+  status               OperationStatus    @default(DRAFT)
+  imagePath            String?            @db.VarChar(500)
+  errorMessage         String?            @db.VarChar(1000)
+  renderedAt           DateTime?
+  sentAt               DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  profile              EntrepreneurProfile @relation(fields: [profileId], references: [id], onDelete: Restrict)
+  service              Service?           @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  user                 User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  renderJob            RenderJob?
+
+  @@index([userId, createdAt])
+  @@unique([userId, receiptNumber])
+  @@map("operations")
+}
+
+model RenderJob {
+  id           Int             @id @default(autoincrement())
+  operationId  Int             @unique
+  status       RenderJobStatus @default(PENDING)
+  attempts     Int             @default(0)
+  errorMessage String?         @db.VarChar(1000)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  operation    Operation       @relation(fields: [operationId], references: [id], onDelete: Cascade)
+
+  @@map("render_jobs")
+}

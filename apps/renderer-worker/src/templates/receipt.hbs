@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <title>{{title}}</title>
+    <style>
+      :root {
+        color-scheme: light;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        padding: 48px;
+        background: #f5f5f0;
+        font-family: "Segoe UI", Arial, sans-serif;
+        color: #111;
+      }
+
+      .sheet {
+        width: 1000px;
+        margin: 0 auto;
+        background: #fff;
+        border: 2px solid #111;
+        padding: 42px;
+      }
+
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 24px;
+        margin-bottom: 28px;
+      }
+
+      .title {
+        margin: 0;
+        font-size: 34px;
+        letter-spacing: 0.12em;
+      }
+
+      .meta {
+        text-align: right;
+        font-size: 18px;
+        line-height: 1.55;
+      }
+
+      .note {
+        margin-bottom: 28px;
+        padding: 16px 18px;
+        border: 1px solid #111;
+        background: #fafafa;
+        font-size: 18px;
+        line-height: 1.55;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: 260px 1fr;
+        gap: 14px 20px;
+        font-size: 22px;
+        line-height: 1.45;
+      }
+
+      .label {
+        font-weight: 700;
+      }
+
+      .amount {
+        margin-top: 32px;
+        padding-top: 20px;
+        border-top: 2px solid #111;
+        font-size: 28px;
+        font-weight: 700;
+      }
+
+      .footer {
+        margin-top: 42px;
+        font-size: 18px;
+        line-height: 1.5;
+        color: #333;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="sheet">
+      <section class="header">
+        <h1 class="title">{{title}}</h1>
+        <div class="meta">
+          <div>Номер квитанции: {{receiptNumber}}</div>
+          <div>Дата и время: {{createdAt}}</div>
+        </div>
+      </section>
+
+      <section class="note">
+        Внутренний документ для подтверждения принятой оплаты. Используется только для внутреннего учёта операций.
+      </section>
+
+      <section class="grid">
+        <div class="label">ФИО ИП</div>
+        <div>{{ipFullName}}</div>
+
+        <div class="label">ИНН</div>
+        <div>{{inn}}</div>
+
+        <div class="label">Адрес</div>
+        <div>{{address}}</div>
+
+        <div class="label">Название услуги</div>
+        <div>{{serviceTitle}}</div>
+
+        <div class="label">Форма оплаты</div>
+        <div>{{paymentMethodLabel}}</div>
+      </section>
+
+      <section class="amount">Сумма: {{amount}} ₽</section>
+
+      <footer class="footer">
+        <div>Документ сформирован автоматически внутри сервиса учёта операций.</div>
+      </footer>
+    </main>
+  </body>
+</html>

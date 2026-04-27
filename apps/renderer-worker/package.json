@@ -1,0 +1,28 @@
+{
+  "name": "@receipt-bot/renderer-worker",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@receipt-bot/shared": "workspace:*",
+    "dotenv": "^16.5.0",
+    "express": "^4.21.2",
+    "handlebars": "^4.7.8",
+    "luxon": "^3.6.1",
+    "pino": "^9.7.0",
+    "playwright": "^1.52.0",
+    "zod": "^3.24.3"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.1",
+    "@types/handlebars": "^4.1.0",
+    "@types/luxon": "^3.6.2",
+    "@types/node": "^22.15.2",
+    "typescript": "^5.6.3"
+  }
+}

@@ -1,0 +1,50 @@
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  bot:
+    build:
+      context: .
+      dockerfile: apps/bot/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      renderer-worker:
+        condition: service_started
+    volumes:
+      - receipts_storage:/app/storage/receipts
+      - exports_storage:/app/storage/exports
+    ports:
+      - "127.0.0.1:3000:3000"
+
+  renderer-worker:
+    build:
+      context: .
+      dockerfile: apps/renderer-worker/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - receipts_storage:/app/storage/receipts
+    ports:
+      - "127.0.0.1:3001:3001"
+
+volumes:
+  postgres_data:
+  receipts_storage:
+  exports_storage:

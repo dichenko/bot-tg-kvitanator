@@ -1,0 +1,11 @@
+node_modules
+dist
+.env
+.pnpm-store
+coverage
+storage
+apps/*/storage
+packages/db/prisma/dev.db
+packages/db/prisma/*.db
+playwright-report
+test-results
