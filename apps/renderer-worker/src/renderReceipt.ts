@@ -64,8 +64,8 @@ export const renderReceiptImage = async (
   try {
     const page = await browser.newPage({
       viewport: {
-        width: 540,
-        height: 1200
+        width: 460,
+        height: 200
       },
       deviceScaleFactor: 2,
       isMobile: true,
@@ -76,12 +76,12 @@ export const renderReceiptImage = async (
     await page.setContent(html, { waitUntil: "networkidle" });
 
     const imagePath = path.join(options.receiptsDir, `receipt-${payload.operationId}.jpg`);
+    const receiptCard = page.locator(".receipt-wrapper");
 
-    await page.screenshot({
+    await receiptCard.screenshot({
       path: imagePath,
       type: "jpeg",
-      quality: 92,
-      fullPage: true
+      quality: 92
     });
 
     return imagePath;
