@@ -1,5 +1,7 @@
 import type { Bot } from "grammy";
 import { mainMenuKeyboard, paymentMethodKeyboard, receiptPreviewKeyboard, servicesKeyboard } from "../keyboards";
+import { config } from "../config";
+import { buildReceiptPreviewText } from "../services/operationService";
 import { logger } from "../services/logger";
 import {
   createService,
@@ -9,13 +11,11 @@ import {
   upsertProfile,
   upsertTelegramUser
 } from "../services/userService";
-import { buildReceiptPreviewText } from "../services/operationService";
 import type { BotContext } from "../types";
 import { clearRegistrationDraft } from "../utils/state";
 import { formatAmount } from "../utils/formatters";
 import { sendMenu } from "../utils/telegram";
 import { parseAmountInput, validateInn, validateRequiredText, validateServiceTitle } from "../utils/validation";
-import { config } from "../config";
 
 const ensureText = (ctx: BotContext): string | null => {
   const text = ctx.message?.text?.trim();
@@ -37,14 +37,14 @@ const handleRegistrationInn = async (ctx: BotContext, text: string): Promise<voi
     await ctx.reply(result.warning);
   }
 
-  await ctx.reply("Введите полное ФИО индивидуального предпринимателя:");
+  await ctx.reply("Введите ФИО ИП:");
 };
 
 const handleRegistrationFullName = async (ctx: BotContext, text: string): Promise<void> => {
   try {
     ctx.session.registrationDraft.ipFullName = validateRequiredText(text, "ФИО ИП");
     ctx.session.awaitingInput = "registration_address";
-    await ctx.reply("Введите адрес:");
+    await ctx.reply("Введите адрес оказания услуги:");
   } catch (error) {
     await ctx.reply(error instanceof Error ? error.message : "Не удалось сохранить ФИО ИП.");
   }
@@ -52,7 +52,7 @@ const handleRegistrationFullName = async (ctx: BotContext, text: string): Promis
 
 const handleRegistrationAddress = async (ctx: BotContext, text: string): Promise<void> => {
   try {
-    const address = validateRequiredText(text, "Адрес");
+    const address = validateRequiredText(text, "Адрес оказания услуги");
     const user = await upsertTelegramUser(ctx.from!);
     const profile = await upsertProfile(user.id, {
       inn: ctx.session.registrationDraft.inn ?? "",
@@ -64,7 +64,7 @@ const handleRegistrationAddress = async (ctx: BotContext, text: string): Promise
     logger.info({ userId: user.id, profileId: profile.id }, "User registration completed");
     await sendMenu(ctx, "Данные ИП сохранены. Главное меню:", mainMenuKeyboard());
   } catch (error) {
-    await ctx.reply(error instanceof Error ? error.message : "Не удалось сохранить адрес.");
+    await ctx.reply(error instanceof Error ? error.message : "Не удалось сохранить адрес оказания услуги.");
   }
 };
 
@@ -85,7 +85,7 @@ const handleProfileEdit = async (
             }
             return result.normalized;
           })()
-        : validateRequiredText(text, field === "ipFullName" ? "ФИО ИП" : "Адрес");
+        : validateRequiredText(text, field === "ipFullName" ? "ФИО ИП" : "Адрес оказания услуги");
 
     await updateProfileField(user.id, field, normalized);
     ctx.session.awaitingInput = null;
@@ -137,12 +137,18 @@ const handleReceiptAmount = async (ctx: BotContext, text: string): Promise<void>
       return;
     }
 
-    await ctx.reply(
-      buildReceiptPreviewText(profile, service, {
-        amount,
-        paymentMethod: ctx.session.receiptDraft.paymentMethod
-      }, config.timezone),
-      { reply_markup: receiptPreviewKeyboard() }
+    await sendMenu(
+      ctx,
+      buildReceiptPreviewText(
+        service,
+        {
+          amount,
+          paymentMethod: ctx.session.receiptDraft.paymentMethod
+        },
+        config.timezone
+      ),
+      receiptPreviewKeyboard(),
+      { parse_mode: "HTML" }
     );
   } catch (error) {
     await ctx.reply(error instanceof Error ? error.message : "Некорректная сумма.");

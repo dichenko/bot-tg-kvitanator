@@ -1,16 +1,24 @@
 import type { Bot } from "grammy";
 import { mainMenuKeyboard } from "../keyboards";
 import { logger } from "../services/logger";
-import { clearRegistrationDraft, clearReceiptDraft } from "../utils/state";
-import { sendMenu } from "../utils/telegram";
 import { getProfileByUserId, upsertTelegramUser } from "../services/userService";
 import type { BotContext } from "../types";
+import { clearRegistrationDraft, clearReceiptDraft } from "../utils/state";
+import { sendMenu } from "../utils/telegram";
+
+const registrationIntroText = [
+  'Сервис "Квитанатор" помогает индивидуальным предпринимателям на патенте выписывать квитанции и вести учёт.',
+  "",
+  "Пожалуйста, заполните данные вашего ИП.",
+  "",
+  "Введите ИНН:"
+].join("\n");
 
 const startRegistration = async (ctx: BotContext): Promise<void> => {
   clearReceiptDraft(ctx.session);
   clearRegistrationDraft(ctx.session);
   ctx.session.awaitingInput = "registration_inn";
-  await ctx.reply("Здравствуйте! Сначала нужно заполнить данные ИП.\n\nВведите ИНН:");
+  await ctx.reply(registrationIntroText);
 };
 
 const goToMainFlow = async (ctx: BotContext): Promise<void> => {
@@ -32,12 +40,12 @@ export const registerCommandHandlers = (bot: Bot<BotContext>): void => {
   bot.command("help", async (ctx) => {
     await ctx.reply(
       [
-        "Бот помогает оформить внутреннюю квитанцию по оплате услуги.",
+        'Сервис "Квитанатор" помогает ИП на патенте фиксировать поступления и формировать внутренние квитанции.',
         "",
         "Доступные действия:",
-        "• зарегистрировать данные ИП;",
+        "• заполнить данные ИП;",
         "• вести список услуг;",
-        "• формировать квитанции в JPEG;",
+        "• быстро создавать квитанции;",
         "• смотреть историю операций;",
         "• выгружать операции в Excel."
       ].join("\n"),

@@ -1,13 +1,14 @@
 import { promises as fs } from "node:fs";
-import { prisma, OperationStatus, Prisma, RenderJobStatus } from "@receipt-bot/db";
-import type { EntrepreneurProfile, Operation, PaymentMethod, Service, User } from "@receipt-bot/db";
-import type { Logger } from "pino";
 import { InputFile } from "grammy";
-import { renderReceipt } from "./rendererClient";
-import type { BotContext, ReceiptDraft } from "../types";
-import { config } from "../config";
-import { formatAmount, formatDateTime, formatPaymentMethod, formatOperationStatus } from "../utils/formatters";
+import { prisma, OperationStatus, Prisma, RenderJobStatus } from "@receipt-bot/db";
+import type { EntrepreneurProfile, Operation, Service, User } from "@receipt-bot/db";
 import { PAYMENT_METHOD_LABELS } from "@receipt-bot/shared";
+import type { Logger } from "pino";
+import { config } from "../config";
+import type { BotContext, ReceiptDraft } from "../types";
+import { formatAmount, formatDateTime, formatPaymentMethod, formatOperationStatus } from "../utils/formatters";
+import { escapeTelegramHtml } from "../utils/telegram";
+import { renderReceipt } from "./rendererClient";
 
 const createTemporaryReceiptNumber = (): string =>
   `TMP-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
@@ -36,6 +37,19 @@ export const getOperationByIdForUser = async (userId: number, operationId: numbe
     }
   });
 
+export const getLatestOperationForUser = async (userId: number): Promise<Operation | null> =>
+  prisma.operation.findFirst({
+    where: {
+      userId,
+      status: {
+        not: OperationStatus.DELETED
+      }
+    },
+    orderBy: {
+      createdAt: "desc"
+    }
+  });
+
 export const buildOperationsSummary = (operations: Operation[], timeZone: string): string => {
   if (operations.length === 0) {
     return "Операций пока нет.";
@@ -54,21 +68,24 @@ export const buildOperationsSummary = (operations: Operation[], timeZone: string
 };
 
 export const buildReceiptPreviewText = (
-  profile: EntrepreneurProfile,
   service: Service,
   draft: Required<Pick<ReceiptDraft, "amount" | "paymentMethod">>,
   timeZone: string
 ): string =>
   [
-    "Проверьте данные квитанции:",
+    "<b>Проверьте данные квитанции</b>",
     "",
-    `ИП: ${profile.ipFullName}`,
-    `ИНН: ${profile.inn}`,
-    `Адрес: ${profile.address}`,
-    `Услуга: ${service.title}`,
-    `Сумма: ${formatAmount(draft.amount)} ₽`,
-    `Форма оплаты: ${formatPaymentMethod(draft.paymentMethod)}`,
-    `Дата: ${formatDateTime(new Date(), timeZone)}`
+    "<b>Услуга</b>",
+    escapeTelegramHtml(service.title),
+    "",
+    "<b>Сумма</b>",
+    `<code>${escapeTelegramHtml(`${formatAmount(draft.amount)} ₽`)}</code>`,
+    "",
+    "<b>Форма оплаты</b>",
+    escapeTelegramHtml(formatPaymentMethod(draft.paymentMethod)),
+    "",
+    "<b>Дата</b>",
+    escapeTelegramHtml(formatDateTime(new Date(), timeZone))
   ].join("\n");
 
 export const createOperationWithSnapshots = async (

@@ -10,7 +10,22 @@ export const renderReceipt = async (rendererUrl: string, payload: RenderReceiptR
   });
 
   if (!response.ok) {
-    throw new Error(`Renderer worker returned HTTP ${response.status}`);
+    let details = "";
+    const clonedResponse = response.clone();
+
+    try {
+      const body = (await response.json()) as { error?: string };
+      details = body.error ? `: ${body.error}` : "";
+    } catch {
+      try {
+        const text = await clonedResponse.text();
+        details = text ? `: ${text}` : "";
+      } catch {
+        details = "";
+      }
+    }
+
+    throw new Error(`Renderer worker returned HTTP ${response.status}${details}`);
   }
 
   return (await response.json()) as RenderReceiptResponse;

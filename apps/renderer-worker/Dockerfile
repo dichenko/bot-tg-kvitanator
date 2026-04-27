@@ -6,6 +6,7 @@ COPY package.json pnpm-workspace.yaml tsconfig.base.json ./
 COPY apps/renderer-worker/package.json apps/renderer-worker/package.json
 COPY packages/shared/package.json packages/shared/package.json
 RUN pnpm install --ignore-scripts --frozen-lockfile=false
+RUN pnpm --filter @receipt-bot/renderer-worker exec playwright install chromium
 
 COPY . .
 RUN pnpm --filter @receipt-bot/shared build

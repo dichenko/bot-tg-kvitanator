@@ -1,10 +1,8 @@
 import { InputFile, InlineKeyboard, type Bot } from "grammy";
-import { prisma } from "@receipt-bot/db";
 import type { PaymentMethod } from "@receipt-bot/db";
 import type { ExportRangeKey } from "@receipt-bot/shared";
-import { logger } from "../services/logger";
+import { config } from "../config";
 import {
-  backToMainKeyboard,
   deleteServiceConfirmKeyboard,
   exportKeyboard,
   mainMenuKeyboard,
@@ -15,10 +13,13 @@ import {
   serviceSelectionKeyboard,
   servicesKeyboard
 } from "../keyboards";
+import { startRegistration } from "./commands";
+import { logger } from "../services/logger";
 import {
   buildOperationsSummary,
   buildReceiptPreviewText,
   createOperationWithSnapshots,
+  getLatestOperationForUser,
   getOperationByIdForUser,
   listRecentOperations,
   renderAndSendOperation,
@@ -34,16 +35,15 @@ import {
 } from "../services/userService";
 import type { BotContext } from "../types";
 import { clearReceiptDraft } from "../utils/state";
+import { formatPaymentMethod } from "../utils/formatters";
 import { sendMenu } from "../utils/telegram";
-import { config } from "../config";
 
 const ensureUserAndProfile = async (ctx: BotContext) => {
   const user = await upsertTelegramUser(ctx.from!);
   const profile = await getProfileByUserId(user.id);
 
   if (!profile) {
-    ctx.session.awaitingInput = "registration_inn";
-    await ctx.reply("Сначала заполните данные ИП. Введите ИНН:");
+    await startRegistration(ctx);
     return null;
   }
 
@@ -61,14 +61,13 @@ const showProfile = async (ctx: BotContext, userId: number): Promise<void> => {
   const profile = await getProfileByUserId(userId);
 
   if (!profile) {
-    ctx.session.awaitingInput = "registration_inn";
-    await ctx.reply("Сначала заполните данные ИП. Введите ИНН:");
+    await startRegistration(ctx);
     return;
   }
 
   await sendMenu(
     ctx,
-    [`ИНН: ${profile.inn}`, `ИП: ${profile.ipFullName}`, `Адрес: ${profile.address}`].join("\n"),
+    [`ИНН: ${profile.inn}`, `ИП: ${profile.ipFullName}`, `Адрес оказания услуги: ${profile.address}`].join("\n"),
     profileKeyboard()
   );
 };
@@ -96,10 +95,9 @@ const showDeleteServiceSelection = async (ctx: BotContext, userId: number): Prom
 };
 
 const showPreviewIfReady = async (ctx: BotContext, userId: number): Promise<void> => {
-  const profile = await getProfileByUserId(userId);
   const draft = ctx.session.receiptDraft;
 
-  if (!profile || !draft?.serviceId || !draft.amount || !draft.paymentMethod) {
+  if (!draft?.serviceId || !draft.amount || !draft.paymentMethod) {
     await ctx.reply("Не удалось собрать данные черновика. Начните заново.", {
       reply_markup: mainMenuKeyboard()
     });
@@ -117,11 +115,16 @@ const showPreviewIfReady = async (ctx: BotContext, userId: number): Promise<void
 
   await sendMenu(
     ctx,
-    buildReceiptPreviewText(profile, service, {
-      amount: draft.amount,
-      paymentMethod: draft.paymentMethod
-    }, config.timezone),
-    receiptPreviewKeyboard()
+    buildReceiptPreviewText(
+      service,
+      {
+        amount: draft.amount,
+        paymentMethod: draft.paymentMethod
+      },
+      config.timezone
+    ),
+    receiptPreviewKeyboard(),
+    { parse_mode: "HTML" }
   );
 };
 
@@ -143,6 +146,43 @@ const sendExport = async (ctx: BotContext, userId: number, rangeKey: ExportRange
   await ctx.replyWithDocument(new InputFile(filePath, fileName), {
     caption: `Excel-выгрузка готова: ${fileName}`
   });
+};
+
+const startReceiptFlow = async (ctx: BotContext, userId: number): Promise<void> => {
+  const [lastOperation, services] = await Promise.all([getLatestOperationForUser(userId), listActiveServices(userId)]);
+  const paymentMethod = lastOperation?.paymentMethod ?? "BANK_TRANSFER";
+
+  let service = null;
+
+  if (lastOperation?.serviceId) {
+    service = services.find((item) => item.id === lastOperation.serviceId) ?? null;
+  }
+
+  if (!service && services.length === 1) {
+    service = services[0];
+  }
+
+  ctx.session.receiptDraft = {
+    serviceId: service?.id,
+    paymentMethod,
+    submitted: false
+  };
+  ctx.session.awaitingInput = null;
+
+  if (services.length === 0) {
+    await sendMenu(ctx, "Сначала добавьте хотя бы одну услугу.", servicesKeyboard());
+    return;
+  }
+
+  if (!service) {
+    await showReceiptServiceSelection(ctx, userId);
+    return;
+  }
+
+  ctx.session.awaitingInput = "receipt_amount";
+  await ctx.reply(
+    [`Услуга: «${service.title}»`, `Форма оплаты: ${formatPaymentMethod(paymentMethod)}`, "", "Введите сумму поступления:"].join("\n")
+  );
 };
 
 export const registerCallbackHandlers = (bot: Bot<BotContext>): void => {
@@ -175,10 +215,7 @@ export const registerCallbackHandlers = (bot: Bot<BotContext>): void => {
     }
 
     if (data === "menu:receipt:new") {
-      ctx.session.receiptDraft = {
-        submitted: false
-      };
-      await showReceiptServiceSelection(ctx, user.id);
+      await startReceiptFlow(ctx, user.id);
       return;
     }
 
@@ -200,13 +237,13 @@ export const registerCallbackHandlers = (bot: Bot<BotContext>): void => {
 
     if (data === "profile:edit:full_name") {
       ctx.session.awaitingInput = "profile_edit_full_name";
-      await ctx.reply("Введите новое полное ФИО ИП:");
+      await ctx.reply("Введите новое ФИО ИП:");
       return;
     }
 
     if (data === "profile:edit:address") {
       ctx.session.awaitingInput = "profile_edit_address";
-      await ctx.reply("Введите новый адрес:");
+      await ctx.reply("Введите новый адрес оказания услуги:");
       return;
     }
 
@@ -250,20 +287,20 @@ export const registerCallbackHandlers = (bot: Bot<BotContext>): void => {
         return;
       }
 
+      const paymentMethod = ctx.session.receiptDraft?.paymentMethod ?? "BANK_TRANSFER";
+
       ctx.session.receiptDraft = {
         ...ctx.session.receiptDraft,
         serviceId,
+        paymentMethod,
         submitted: false
       };
 
       if (!ctx.session.receiptDraft.amount) {
         ctx.session.awaitingInput = "receipt_amount";
-        await ctx.reply(`Вы выбрали услугу «${service.title}».\nВведите сумму:`);
-        return;
-      }
-
-      if (!ctx.session.receiptDraft.paymentMethod) {
-        await ctx.reply("Выберите форму оплаты:", { reply_markup: paymentMethodKeyboard() });
+        await ctx.reply(
+          [`Услуга: «${service.title}»`, `Форма оплаты: ${formatPaymentMethod(paymentMethod)}`, "", "Введите сумму поступления:"].join("\n")
+        );
         return;
       }
 
@@ -368,6 +405,8 @@ export const registerCallbackHandlers = (bot: Bot<BotContext>): void => {
       return;
     }
 
-    await ctx.reply("Неизвестное действие.", { reply_markup: new InlineKeyboard().text("Главное меню", "menu:main") });
+    await ctx.reply("Неизвестное действие.", {
+      reply_markup: new InlineKeyboard().text("Главное меню", "menu:main")
+    });
   });
 };
