@@ -60,6 +60,18 @@ Generated files are stored in Docker volumes:
 - `receipts_storage`
 - `exports_storage`
 
+Database connection string does not need to be stored manually in `.env`.
+It is assembled automatically from:
+
+- `POSTGRES_DB`
+- `POSTGRES_USER`
+- `POSTGRES_PASSWORD`
+- `POSTGRES_PORT`
+
+Optional override:
+
+- `POSTGRES_HOST` defaults to `postgres` for the internal Docker network.
+
 ## Prisma
 
 Useful commands:
@@ -111,6 +123,7 @@ Do not bind PostgreSQL to `0.0.0.0`.
 - The bot exposes `WEBHOOK_PATH` on `BOT_PORT`.
 - `WEBHOOK_URL` must point to the public HTTPS domain proxied by Caddy.
 - The DNS record for the domain must resolve to the VPS before calling `setWebhook`.
+- `RENDERER_URL` intentionally uses `http://renderer-worker:3001` because it is an internal Docker-network call, not a public endpoint.
 
 ## Main test flows
 

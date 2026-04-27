@@ -7,7 +7,6 @@ const envSchema = z.object({
   WEBHOOK_URL: z.string().min(1),
   WEBHOOK_PATH: z.string().default("/webhook"),
   BOT_PORT: z.coerce.number().int().positive().default(3000),
-  DATABASE_URL: z.string().min(1),
   RENDERER_URL: z.string().url(),
   RECEIPTS_DIR: z.string().min(1),
   EXPORTS_DIR: z.string().min(1),

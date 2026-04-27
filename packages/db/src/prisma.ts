@@ -1,9 +1,12 @@
 import { PrismaClient } from "@prisma/client";
+import { ensureDatabaseUrl } from "./databaseUrl";
 
 declare global {
   // eslint-disable-next-line no-var
   var __receiptBotPrisma__: PrismaClient | undefined;
 }
+
+ensureDatabaseUrl();
 
 export const prisma =
   global.__receiptBotPrisma__ ??

@@ -6,8 +6,8 @@
   "scripts": {
     "build": "pnpm -r build",
     "postinstall": "pnpm prisma:generate",
-    "prisma:generate": "pnpm --filter @receipt-bot/db exec prisma generate --schema prisma/schema.prisma",
-    "prisma:migrate:dev": "pnpm --filter @receipt-bot/db exec prisma migrate dev --schema prisma/schema.prisma",
-    "prisma:migrate:deploy": "pnpm --filter @receipt-bot/db exec prisma migrate deploy --schema prisma/schema.prisma"
+    "prisma:generate": "node scripts/run-prisma.cjs generate",
+    "prisma:migrate:dev": "node scripts/run-prisma.cjs migrate dev",
+    "prisma:migrate:deploy": "node scripts/run-prisma.cjs migrate deploy"
   }
 }
