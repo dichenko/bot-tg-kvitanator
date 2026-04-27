@@ -2,9 +2,21 @@
 <html lang="ru">
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{{title}}</title>
     <style>
       :root {
+        --bg: #f3f4f6;
+        --card-bg: #ffffff;
+        --border: #e5e7eb;
+        --accent: #2563eb;
+        --success: #16a34a;
+        --success-soft: #dcfce7;
+        --text-main: #111827;
+        --text-muted: #6b7280;
+        --text-soft: #9ca3af;
+        --radius-lg: 22px;
+        --radius-md: 14px;
         color-scheme: light;
       }
 
@@ -14,113 +26,449 @@
 
       body {
         margin: 0;
-        padding: 48px;
-        background: #f5f5f0;
-        font-family: "Segoe UI", Arial, sans-serif;
-        color: #111;
+        padding: 18px;
+        background: var(--bg);
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-size: 14px;
+        color: var(--text-main);
+        display: flex;
+        justify-content: center;
       }
 
-      .sheet {
-        width: 1000px;
-        margin: 0 auto;
-        background: #fff;
-        border: 2px solid #111;
-        padding: 42px;
+      .mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
       }
 
-      .header {
+      .receipt-wrapper {
+        width: 100%;
+        max-width: 560px;
+      }
+
+      .receipt-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        box-shadow:
+          0 18px 45px rgba(15, 23, 42, 0.16),
+          0 0 0 1px rgba(15, 23, 42, 0.02);
+        overflow: hidden;
+      }
+
+      .receipt-header {
+        padding: 18px 20px 14px;
+        background: linear-gradient(145deg, #f9fafb 0%, #ffffff 60%, #eef2ff 100%);
+        border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+      }
+
+      .header-top {
         display: flex;
         justify-content: space-between;
         align-items: flex-start;
-        gap: 24px;
-        margin-bottom: 28px;
+        gap: 12px;
       }
 
-      .title {
-        margin: 0;
-        font-size: 34px;
-        letter-spacing: 0.12em;
+      .logo-mark {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
       }
 
-      .meta {
-        text-align: right;
-        font-size: 18px;
-        line-height: 1.55;
+      .logo-icon {
+        width: 30px;
+        height: 30px;
+        border-radius: 8px;
+        background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 50%, #1e293b 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #ffffff;
+        font-size: 14px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        box-shadow: 0 2px 8px rgba(30, 58, 138, 0.3);
+        position: relative;
+        overflow: hidden;
       }
 
-      .note {
-        margin-bottom: 28px;
-        padding: 16px 18px;
-        border: 1px solid #111;
-        background: #fafafa;
-        font-size: 18px;
-        line-height: 1.55;
+      .logo-icon::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 40%;
+        height: 100%;
+        background: linear-gradient(90deg, rgba(147, 197, 253, 0.4), transparent);
       }
 
-      .grid {
+      .logo-text {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+      }
+
+      .logo-text-main {
+        font-size: 14px;
+        font-weight: 500;
+        letter-spacing: 0.01em;
+        color: #0f172a;
+      }
+
+      .logo-text-sub {
+        font-size: 10px;
+        color: var(--text-muted);
+      }
+
+      .status-badge {
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: var(--success-soft);
+        color: var(--success);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.09em;
+        white-space: nowrap;
+      }
+
+      .header-meta {
+        margin-top: 22px;
         display: grid;
-        grid-template-columns: 260px 1fr;
-        gap: 14px 20px;
-        font-size: 22px;
-        line-height: 1.45;
+        grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+        gap: 10px;
       }
 
-      .label {
-        font-weight: 700;
+      .meta-label {
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        font-size: 10px;
+        color: var(--text-soft);
+        margin-bottom: 3px;
       }
 
-      .amount {
-        margin-top: 32px;
-        padding-top: 20px;
-        border-top: 2px solid #111;
-        font-size: 28px;
-        font-weight: 700;
+      .meta-value {
+        font-size: 13px;
+        color: var(--text-main);
       }
 
-      .footer {
-        margin-top: 42px;
+      .meta-note {
+        font-size: 11px;
+        color: var(--text-muted);
+      }
+
+      .meta-right {
+        text-align: right;
+      }
+
+      .meta-serial {
         font-size: 18px;
-        line-height: 1.5;
-        color: #333;
+        font-weight: 600;
+      }
+
+      .receipt-body {
+        padding: 14px 20px 18px;
+      }
+
+      .section {
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border);
+        padding: 12px 12px 10px;
+        background-color: #ffffff;
+        margin-bottom: 10px;
+      }
+
+      .field-label {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: var(--text-soft);
+        margin-bottom: 3px;
+      }
+
+      .field-value {
+        font-size: 14px;
+        color: var(--text-main);
+      }
+
+      .field-value-muted {
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-top: 2px;
+      }
+
+      .services-title {
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.16em;
+        color: var(--text-soft);
+        margin-bottom: 8px;
+      }
+
+      .services-header-row {
+        display: flex;
+        justify-content: space-between;
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.16em;
+        color: var(--text-soft);
+        padding-bottom: 6px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .services-header-right {
+        display: flex;
+        gap: 18px;
+      }
+
+      .service-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 0;
+        border-bottom: 1px dashed #e5e7eb;
+        gap: 12px;
+      }
+
+      .service-main {
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+
+      .service-name {
+        font-size: 16px;
+        color: var(--text-main);
+      }
+
+      .service-meta {
+        margin-top: 3px;
+        font-size: 11px;
+        color: var(--text-muted);
+      }
+
+      .service-right {
+        flex: 0 0 auto;
+        text-align: right;
+        font-size: 13px;
+        white-space: nowrap;
+      }
+
+      .service-right-content {
+        display: flex;
+        gap: 18px;
+        align-items: center;
+        justify-content: flex-end;
+      }
+
+      .service-right-content > * {
+        min-width: 60px;
+        text-align: right;
+      }
+
+      .service-qty {
+        font-size: 16px;
+        color: var(--text-muted);
+      }
+
+      .summary-block {
+        margin-top: 6px;
+        padding-top: 8px;
+        border-top: 1px solid var(--border);
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .summary-label {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.16em;
+        color: var(--text-soft);
+      }
+
+      .summary-amount {
+        font-size: 20px;
+        font-weight: 600;
+        color: #0f172a;
+      }
+
+      .summary-note {
+        margin-top: 2px;
+        font-size: 11px;
+        color: var(--text-muted);
+      }
+
+      .pay-form-block {
+        margin-top: 10px;
+      }
+
+      .signature-line {
+        margin-top: 5px;
+        padding-bottom: 4px;
+        border-bottom: 1px dashed #d1d5db;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .signature-title {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.16em;
+        color: var(--text-soft);
+      }
+
+      .signature-name {
+        font-size: 13px;
+        color: var(--text-main);
+      }
+
+      .signature-role {
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-top: 2px;
+      }
+
+      .signature-placeholder {
+        font-size: 12px;
+        color: var(--text-soft);
+        white-space: nowrap;
+      }
+
+      .signature-note {
+        margin-top: 4px;
+        font-size: 11px;
+        color: var(--text-muted);
+      }
+
+      .footer-note {
+        border-top: 1px solid #e5e7eb;
+        background: #f9fafb;
+        padding: 10px 10px 14px;
+        text-align: center;
+        font-size: 10px;
+        color: var(--text-soft);
+      }
+
+      @media (max-width: 480px) {
+        .receipt-card {
+          border-radius: 18px;
+        }
+
+        .receipt-header,
+        .receipt-body {
+          padding-inline: 14px;
+        }
+
+        .section {
+          padding-inline: 10px;
+        }
+
+        .header-meta {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .summary-block {
+          align-items: flex-start;
+        }
       }
     </style>
   </head>
   <body>
-    <main class="sheet">
-      <section class="header">
-        <h1 class="title">{{title}}</h1>
-        <div class="meta">
-          <div>Номер квитанции: {{receiptNumber}}</div>
-          <div>Дата и время: {{createdAt}}</div>
+    <div class="receipt-wrapper">
+      <div class="receipt-card">
+        <div class="receipt-header">
+          <div class="header-top">
+            <div class="logo-mark">
+              <div class="logo-icon">KB</div>
+              <div class="logo-text">
+                <div class="logo-text-main">Квитанатор</div>
+                <div class="logo-text-sub">Внутренние квитанции для ИП</div>
+              </div>
+            </div>
+            <div class="status-badge">Оплата получена</div>
+          </div>
+
+          <div class="header-meta">
+            <div>
+              <div class="meta-label">Документ</div>
+              <div class="meta-value meta-serial">{{title}}</div>
+              <div class="meta-note">Внутренний документ для учёта оплаты услуги</div>
+            </div>
+            <div class="meta-right">
+              <div class="meta-label">Номер</div>
+              <div class="meta-value meta-serial">№ {{receiptNumber}}</div>
+              <div class="meta-note">от <span class="mono">{{createdAt}}</span></div>
+            </div>
+          </div>
         </div>
-      </section>
 
-      <section class="note">
-        Внутренний документ для подтверждения принятой оплаты. Используется только для внутреннего учёта операций.
-      </section>
+        <div class="receipt-body">
+          <div class="section">
+            <div class="field-label">Индивидуальный предприниматель</div>
+            <div class="field-value">{{ipFullName}}</div>
+            <div class="field-value field-value-muted mono">ИНН: {{inn}}</div>
+          </div>
 
-      <section class="grid">
-        <div class="label">ФИО ИП</div>
-        <div>{{ipFullName}}</div>
+          <div class="section">
+            <div class="field-label">Адрес осуществления расчёта</div>
+            <div class="field-value">{{address}}</div>
+          </div>
 
-        <div class="label">ИНН</div>
-        <div>{{inn}}</div>
+          <div class="section">
+            <div class="services-title">Услуги</div>
 
-        <div class="label">Адрес</div>
-        <div>{{address}}</div>
+            <div class="services-header-row">
+              <div>Наименование услуги</div>
+              <div class="services-header-right">
+                <span>Кол-во</span>
+                <span>Сумма, ₽</span>
+              </div>
+            </div>
 
-        <div class="label">Название услуги</div>
-        <div>{{serviceTitle}}</div>
+            <div class="service-row">
+              <div class="service-main">
+                <div class="service-name">{{serviceTitle}}</div>
+                <div class="service-meta">Оказанная услуга</div>
+              </div>
+              <div class="service-right">
+                <div class="service-right-content">
+                  <div class="service-qty">1 усл.</div>
+                  <div class="mono">{{amount}}</div>
+                </div>
+              </div>
+            </div>
 
-        <div class="label">Форма оплаты</div>
-        <div>{{paymentMethodLabel}}</div>
-      </section>
+            <div class="summary-block">
+              <div>
+                <div class="summary-label">Итого к оплате</div>
+                <div class="summary-note">Сумма принята и зафиксирована во внутреннем учёте операций</div>
+              </div>
+              <div class="summary-amount mono">{{amount}} ₽</div>
+            </div>
 
-      <section class="amount">Сумма: {{amount}} ₽</section>
+            <div class="pay-form-block">
+              <div class="field-label">Форма расчёта</div>
+              <div class="field-value">{{paymentMethodLabel}}</div>
+            </div>
+          </div>
 
-      <footer class="footer">
-        <div>Документ сформирован автоматически внутри сервиса учёта операций.</div>
-      </footer>
-    </main>
+          <div class="section">
+            <div class="signature-title">Лицо, осуществившее расчёт</div>
+            <div class="signature-line">
+              <div>
+                <div class="signature-name">{{ipFullName}}</div>
+                <div class="signature-role">Индивидуальный предприниматель</div>
+              </div>
+              <div class="signature-placeholder">____________</div>
+            </div>
+            <div class="signature-note">
+              Подпись не требуется при формировании квитанции в электронной форме.
+            </div>
+          </div>
+        </div>
+
+        <div class="footer-note">Сформировано сервисом «Квитанатор»</div>
+      </div>
+    </div>
   </body>
 </html>
