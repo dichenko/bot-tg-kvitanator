@@ -1,6 +1,8 @@
 node_modules
 dist
 .env
+.env.*
+!.env.example
 .pnpm-store
 coverage
 storage
@@ -9,3 +11,9 @@ packages/db/prisma/dev.db
 packages/db/prisma/*.db
 playwright-report
 test-results
+*.log
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+codex_prompt_telegram_receipt_bot.md
