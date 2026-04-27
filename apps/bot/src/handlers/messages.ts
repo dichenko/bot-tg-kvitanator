@@ -1,6 +1,5 @@
 import type { Bot } from "grammy";
 import { mainMenuKeyboard, paymentMethodKeyboard, receiptPreviewKeyboard, servicesKeyboard } from "../keyboards";
-import { config } from "../config";
 import { buildReceiptPreviewText } from "../services/operationService";
 import { logger } from "../services/logger";
 import {
@@ -144,8 +143,7 @@ const handleReceiptAmount = async (ctx: BotContext, text: string): Promise<void>
         {
           amount,
           paymentMethod: ctx.session.receiptDraft.paymentMethod
-        },
-        config.timezone
+        }
       ),
       receiptPreviewKeyboard(),
       { parse_mode: "HTML" }

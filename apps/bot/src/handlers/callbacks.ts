@@ -120,8 +120,7 @@ const showPreviewIfReady = async (ctx: BotContext, userId: number): Promise<void
       {
         amount: draft.amount,
         paymentMethod: draft.paymentMethod
-      },
-      config.timezone
+      }
     ),
     receiptPreviewKeyboard(),
     { parse_mode: "HTML" }

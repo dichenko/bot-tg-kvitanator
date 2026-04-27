@@ -69,23 +69,13 @@ export const buildOperationsSummary = (operations: Operation[], timeZone: string
 
 export const buildReceiptPreviewText = (
   service: Service,
-  draft: Required<Pick<ReceiptDraft, "amount" | "paymentMethod">>,
-  timeZone: string
+  draft: Required<Pick<ReceiptDraft, "amount" | "paymentMethod">>
 ): string =>
   [
     "<b>Проверьте данные квитанции</b>",
-    "",
-    "<b>Услуга</b>",
-    escapeTelegramHtml(service.title),
-    "",
-    "<b>Сумма</b>",
-    `<code>${escapeTelegramHtml(`${formatAmount(draft.amount)} ₽`)}</code>`,
-    "",
-    "<b>Форма оплаты</b>",
-    escapeTelegramHtml(formatPaymentMethod(draft.paymentMethod)),
-    "",
-    "<b>Дата</b>",
-    escapeTelegramHtml(formatDateTime(new Date(), timeZone))
+    `Услуга: ${escapeTelegramHtml(service.title)}`,
+    `Сумма: <code>${escapeTelegramHtml(`${formatAmount(draft.amount)} ₽`)}</code>`,
+    `Форма оплаты: ${escapeTelegramHtml(formatPaymentMethod(draft.paymentMethod))}`
   ].join("\n");
 
 export const createOperationWithSnapshots = async (
