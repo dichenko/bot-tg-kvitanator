@@ -64,19 +64,23 @@ export const renderReceiptImage = async (
   try {
     const page = await browser.newPage({
       viewport: {
-        width: 1100,
-        height: 1500
+        width: 540,
+        height: 1200
       },
-      deviceScaleFactor: 2
+      deviceScaleFactor: 2,
+      isMobile: true,
+      hasTouch: false
     });
 
+    await page.emulateMedia({ media: "screen" });
     await page.setContent(html, { waitUntil: "networkidle" });
+
     const imagePath = path.join(options.receiptsDir, `receipt-${payload.operationId}.jpg`);
 
     await page.screenshot({
       path: imagePath,
       type: "jpeg",
-      quality: 90,
+      quality: 92,
       fullPage: true
     });
 
