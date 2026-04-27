@@ -21,4 +21,4 @@ jobs:
             git pull origin main
             docker compose pull || true
             docker compose up -d --build
-            docker compose exec -T bot pnpm prisma:migrate:deploy
+            docker compose exec -T bot node scripts/run-prisma.cjs migrate deploy

@@ -18,12 +18,14 @@ RUN pnpm --filter @receipt-bot/bot build
 
 FROM node:20-bookworm-slim AS runtime
 WORKDIR /app
-RUN corepack enable
+RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/bot/node_modules ./apps/bot/node_modules
+COPY --from=deps /app/packages/db/node_modules ./packages/db/node_modules
 COPY --from=build /app/apps/bot/dist ./apps/bot/dist
 COPY --from=build /app/apps/bot/package.json ./apps/bot/package.json
 COPY --from=build /app/packages/db ./packages/db
 COPY --from=build /app/packages/shared ./packages/shared
+COPY --from=build /app/scripts ./scripts
 COPY package.json pnpm-workspace.yaml ./
 CMD ["node", "apps/bot/dist/index.js"]
