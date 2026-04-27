@@ -1,9 +1,31 @@
 import express from "express";
-import { webhookCallback } from "grammy";
+import { Bot, webhookCallback } from "grammy";
 import { prisma } from "@receipt-bot/db";
 import { createBot } from "./bot";
 import { config } from "./config";
 import { logger } from "./services/logger";
+import type { BotContext } from "./types";
+
+const sleep = async (ms: number): Promise<void> => {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+};
+
+const ensureWebhook = async (bot: Bot<BotContext>): Promise<void> => {
+  let attempt = 0;
+
+  while (true) {
+    try {
+      attempt += 1;
+      await bot.api.setWebhook(config.webhookUrl);
+      logger.info({ webhookUrl: config.webhookUrl, attempt }, "Webhook configured");
+      return;
+    } catch (error) {
+      const delayMs = Math.min(60_000, 5_000 * attempt);
+      logger.error({ err: error, webhookUrl: config.webhookUrl, attempt, delayMs }, "Webhook setup failed, retry scheduled");
+      await sleep(delayMs);
+    }
+  }
+};
 
 const start = async (): Promise<void> => {
   const bot = createBot();
@@ -18,8 +40,6 @@ const start = async (): Promise<void> => {
   }
 
   await bot.init();
-  await bot.api.setWebhook(config.webhookUrl);
-  logger.info({ webhookUrl: config.webhookUrl }, "Webhook configured");
 
   const app = express();
   app.use(express.json({ limit: "1mb" }));
@@ -39,6 +59,8 @@ const start = async (): Promise<void> => {
   app.listen(config.botPort, () => {
     logger.info({ port: config.botPort, mode: config.botMode }, "Bot HTTP server started");
   });
+
+  void ensureWebhook(bot);
 };
 
 start().catch((error) => {
