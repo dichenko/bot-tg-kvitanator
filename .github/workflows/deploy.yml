@@ -17,8 +17,19 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
+            set -e
+            dump_logs() {
+              docker compose ps || true
+              docker compose logs postgres --tail=100 || true
+              docker compose logs renderer-worker --tail=100 || true
+              docker compose logs bot --tail=100 || true
+            }
+            trap dump_logs ERR
             cd ${{ secrets.VPS_PROJECT_PATH }}
             git pull origin main
             docker compose pull || true
-            docker compose up -d --build
-            docker compose exec -T bot node scripts/run-prisma.cjs migrate deploy
+            docker compose build bot renderer-worker
+            docker compose up -d postgres renderer-worker
+            docker compose run --rm --no-deps bot node scripts/run-prisma.cjs migrate deploy
+            docker compose up -d bot
+            docker compose ps
