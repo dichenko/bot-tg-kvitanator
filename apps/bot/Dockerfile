@@ -20,6 +20,7 @@ FROM node:20-bookworm-slim AS runtime
 WORKDIR /app
 RUN corepack enable
 COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/apps/bot/node_modules ./apps/bot/node_modules
 COPY --from=build /app/apps/bot/dist ./apps/bot/dist
 COPY --from=build /app/apps/bot/package.json ./apps/bot/package.json
 COPY --from=build /app/packages/db ./packages/db
