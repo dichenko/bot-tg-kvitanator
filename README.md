@@ -142,16 +142,22 @@ Recommended VPS flow:
 
 1. Upload the CSV file to the server, for example to `/root/File1.csv`.
 2. Open the project directory on the VPS.
-3. Make sure PostgreSQL is running:
+3. Pull the latest code:
 
 ```bash
-docker compose up -d postgres
+git pull
 ```
 
-4. Run the import:
+4. Rebuild the bot image so the import script is present in the container:
 
 ```bash
-pnpm import:legacy-receipts -- --csv /root/File1.csv --tg-id 19422781
+docker compose build bot
+```
+
+5. Run the import through Docker, without `pnpm` on the server:
+
+```bash
+sh scripts/import-legacy-receipts-docker.sh /root/File1.csv 19422781
 ```
 
 Backups are written to `tmp_import/backups/`.
