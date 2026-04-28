@@ -8,7 +8,7 @@ import { config } from "../config";
 import { mainMenuKeyboard } from "../keyboards";
 import type { BotContext, ReceiptDraft } from "../types";
 import { formatAmount, formatDateTime, formatPaymentMethod, formatOperationStatus } from "../utils/formatters";
-import { escapeTelegramHtml, sendMenu } from "../utils/telegram";
+import { escapeTelegramHtml } from "../utils/telegram";
 import { renderReceipt } from "./rendererClient";
 
 const createTemporaryReceiptNumber = (): string =>
@@ -213,7 +213,7 @@ export const renderAndSendOperation = async (
       }
     });
 
-    await sendMenu(ctx, "Главное меню", mainMenuKeyboard());
+    await ctx.reply("Главное меню", { reply_markup: mainMenuKeyboard() });
 
     logger.info({ operationId: operation.id, imagePath: renderResult.imagePath }, "Render success");
   } catch (error) {

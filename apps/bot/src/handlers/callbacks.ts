@@ -4,7 +4,6 @@ import type { ExportRangeKey } from "@receipt-bot/shared";
 import { config } from "../config";
 import {
   deleteServiceConfirmKeyboard,
-  exportKeyboard,
   mainMenuKeyboard,
   operationsKeyboard,
   paymentMethodKeyboard,
@@ -115,13 +114,10 @@ const showPreviewIfReady = async (ctx: BotContext, userId: number): Promise<void
 
   await sendMenu(
     ctx,
-    buildReceiptPreviewText(
-      service,
-      {
-        amount: draft.amount,
-        paymentMethod: draft.paymentMethod
-      }
-    ),
+    buildReceiptPreviewText(service, {
+      amount: draft.amount,
+      paymentMethod: draft.paymentMethod
+    }),
     receiptPreviewKeyboard(),
     { parse_mode: "HTML" }
   );
@@ -132,7 +128,7 @@ const showOperations = async (ctx: BotContext, userId: number): Promise<void> =>
   await sendMenu(ctx, buildOperationsSummary(operations, config.timezone), operationsKeyboard(operations));
 };
 
-const sendExport = async (ctx: BotContext, userId: number, rangeKey: ExportRangeKey): Promise<void> => {
+const sendExport = async (ctx: BotContext, userId: number, rangeKey: ExportRangeKey = "all_time"): Promise<void> => {
   const operations = await getOperationsForExport(userId, rangeKey, config.timezone);
   const { fileName, filePath } = await buildExportFile(operations, {
     userId,
@@ -145,6 +141,7 @@ const sendExport = async (ctx: BotContext, userId: number, rangeKey: ExportRange
   await ctx.replyWithDocument(new InputFile(filePath, fileName), {
     caption: `Excel-выгрузка готова: ${fileName}`
   });
+  await ctx.reply("Главное меню", { reply_markup: mainMenuKeyboard() });
 };
 
 const startReceiptFlow = async (ctx: BotContext, userId: number): Promise<void> => {
@@ -179,9 +176,7 @@ const startReceiptFlow = async (ctx: BotContext, userId: number): Promise<void> 
   }
 
   ctx.session.awaitingInput = "receipt_amount";
-  await ctx.reply(
-    [`Услуга: «${service.title}»`, `Форма оплаты: ${formatPaymentMethod(paymentMethod)}`, "", "Введите сумму поступления:"].join("\n")
-  );
+  await ctx.reply([`Услуга: «${service.title}»`, `Форма оплаты: ${formatPaymentMethod(paymentMethod)}`, "", "Введите сумму поступления:"].join("\n"));
 };
 
 export const registerCallbackHandlers = (bot: Bot<BotContext>): void => {
@@ -224,7 +219,7 @@ export const registerCallbackHandlers = (bot: Bot<BotContext>): void => {
     }
 
     if (data === "menu:export") {
-      await sendMenu(ctx, "Выберите период для Excel-выгрузки:", exportKeyboard());
+      await sendExport(ctx, user.id, "all_time");
       return;
     }
 
@@ -297,9 +292,7 @@ export const registerCallbackHandlers = (bot: Bot<BotContext>): void => {
 
       if (!ctx.session.receiptDraft.amount) {
         ctx.session.awaitingInput = "receipt_amount";
-        await ctx.reply(
-          [`Услуга: «${service.title}»`, `Форма оплаты: ${formatPaymentMethod(paymentMethod)}`, "", "Введите сумму поступления:"].join("\n")
-        );
+        await ctx.reply([`Услуга: «${service.title}»`, `Форма оплаты: ${formatPaymentMethod(paymentMethod)}`, "", "Введите сумму поступления:"].join("\n"));
         return;
       }
 
@@ -399,8 +392,7 @@ export const registerCallbackHandlers = (bot: Bot<BotContext>): void => {
     }
 
     if (data.startsWith("export:")) {
-      const rangeKey = data.split(":").pop() as ExportRangeKey;
-      await sendExport(ctx, user.id, rangeKey);
+      await sendExport(ctx, user.id, "all_time");
       return;
     }
 

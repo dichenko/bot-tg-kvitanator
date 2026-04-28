@@ -85,7 +85,6 @@ export const buildExportFile = async (
     { header: "Сумма", key: "amount", width: 14 },
     { header: "Форма оплаты", key: "paymentMethod", width: 18 },
     { header: "Статус", key: "status", width: 18 },
-    { header: "Telegram user_id", key: "userId", width: 18 }
   ];
 
   operations.forEach((operation) => {
@@ -98,8 +97,7 @@ export const buildExportFile = async (
       service: operation.serviceTitleSnapshot,
       amount: Number(operation.amount),
       paymentMethod: formatPaymentMethod(operation.paymentMethod),
-      status: formatOperationStatus(operation.status),
-      userId: operation.userId
+      status: formatOperationStatus(operation.status)
     });
   });
 
