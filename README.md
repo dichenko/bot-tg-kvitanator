@@ -117,6 +117,47 @@ ports:
 
 Do not bind PostgreSQL to `0.0.0.0`.
 
+## Legacy receipts import
+
+The repository includes a one-time import command that:
+
+- creates a JSON backup of current `operations` and `render_jobs`
+- removes the current receipts from the database
+- imports legacy receipts from a semicolon-separated CSV file
+- preserves receipt numbers like `KV-000001`
+
+Default import command:
+
+```bash
+pnpm import:legacy-receipts
+```
+
+Custom CSV path and Telegram ID:
+
+```bash
+pnpm import:legacy-receipts -- --csv /root/File1.csv --tg-id 19422781
+```
+
+Recommended VPS flow:
+
+1. Upload the CSV file to the server, for example to `/root/File1.csv`.
+2. Open the project directory on the VPS.
+3. Make sure PostgreSQL is running:
+
+```bash
+docker compose up -d postgres
+```
+
+4. Run the import:
+
+```bash
+pnpm import:legacy-receipts -- --csv /root/File1.csv --tg-id 19422781
+```
+
+Backups are written to `tmp_import/backups/`.
+
+The import uses the current entrepreneur profile from the database for `ИНН`, `ФИО ИП`, and `адрес`, because the legacy CSV does not contain those fields.
+
 ## Webhook notes
 
 - Production mode uses `BOT_MODE=webhook`.
