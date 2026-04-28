@@ -1,16 +1,14 @@
-import type { Operation, Service } from "@receipt-bot/db";
+import type { Operation, PaymentMethod, Service } from "@receipt-bot/db";
 import { InlineKeyboard } from "grammy";
 
 export const mainMenuKeyboard = (): InlineKeyboard =>
   new InlineKeyboard()
     .text("➕ Новая квитанция", "menu:receipt:new")
     .row()
-    .text("📋 Операции", "menu:operations")
-    .row()
-    .text("📊 Excel-выгрузка", "menu:export")
-    .row()
     .text("🧾 Услуги", "menu:services")
+    .text("📊 Выгрузка", "menu:export")
     .row()
+    .text("📄 Квитанции", "menu:operations")
     .text("👤 Данные ИП", "menu:profile");
 
 export const backToMainKeyboard = (): InlineKeyboard => new InlineKeyboard().text("⬅️ Назад", "menu:main");
@@ -61,29 +59,19 @@ export const paymentMethodKeyboard = (): InlineKeyboard =>
     .row()
     .text("❌ Отмена", "receipt:cancel");
 
-export const receiptPreviewKeyboard = (): InlineKeyboard =>
-  new InlineKeyboard()
+export const receiptPreviewKeyboard = (currentPaymentMethod: PaymentMethod): InlineKeyboard => {
+  const nextPaymentMethod = currentPaymentMethod === "CASH" ? "BANK_TRANSFER" : "CASH";
+  const toggleLabel = currentPaymentMethod === "CASH" ? "🏦 Безнал" : "💵 Нал";
+
+  return new InlineKeyboard()
     .text("✅ Сгенерировать квитанцию", "receipt:confirm")
     .row()
-    .text("✏️ Изменить услугу", "receipt:change:service")
+    .text("🧾 Услуга", "receipt:change:service")
+    .text("💰 Сумма", "receipt:change:amount")
     .row()
-    .text("✏️ Изменить сумму", "receipt:change:amount")
-    .row()
-    .text("💳 Изменить форму оплаты", "receipt:change:payment")
-    .row()
+    .text(toggleLabel, `receipt:payment:${nextPaymentMethod}`)
     .text("❌ Отмена", "receipt:cancel");
-
-export const exportKeyboard = (): InlineKeyboard =>
-  new InlineKeyboard()
-    .text("Сегодня", "export:today")
-    .row()
-    .text("Этот месяц", "export:current_month")
-    .row()
-    .text("Прошлый месяц", "export:previous_month")
-    .row()
-    .text("Всё время", "export:all_time")
-    .row()
-    .text("⬅️ Назад", "menu:main");
+};
 
 export const operationsKeyboard = (operations: Operation[]): InlineKeyboard => {
   const keyboard = new InlineKeyboard();

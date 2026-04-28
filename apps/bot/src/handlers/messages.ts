@@ -138,14 +138,11 @@ const handleReceiptAmount = async (ctx: BotContext, text: string): Promise<void>
 
     await sendMenu(
       ctx,
-      buildReceiptPreviewText(
-        service,
-        {
-          amount,
-          paymentMethod: ctx.session.receiptDraft.paymentMethod
-        }
-      ),
-      receiptPreviewKeyboard(),
+      buildReceiptPreviewText(service, {
+        amount,
+        paymentMethod: ctx.session.receiptDraft.paymentMethod
+      }),
+      receiptPreviewKeyboard(ctx.session.receiptDraft.paymentMethod),
       { parse_mode: "HTML" }
     );
   } catch (error) {

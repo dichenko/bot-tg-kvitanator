@@ -118,7 +118,7 @@ const showPreviewIfReady = async (ctx: BotContext, userId: number): Promise<void
       amount: draft.amount,
       paymentMethod: draft.paymentMethod
     }),
-    receiptPreviewKeyboard(),
+    receiptPreviewKeyboard(draft.paymentMethod),
     { parse_mode: "HTML" }
   );
 };
@@ -388,11 +388,6 @@ export const registerCallbackHandlers = (bot: Bot<BotContext>): void => {
       }
 
       await sendExistingReceipt(ctx, operation, logger, config.timezone);
-      return;
-    }
-
-    if (data.startsWith("export:")) {
-      await sendExport(ctx, user.id, "all_time");
       return;
     }
 

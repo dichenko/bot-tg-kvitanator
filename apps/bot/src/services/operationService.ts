@@ -130,7 +130,7 @@ export const sendExistingReceipt = async (
   ctx: BotContext,
   operation: Operation,
   logger: Logger,
-  timeZone: string
+  _timeZone: string
 ): Promise<void> => {
   if (!operation.imagePath) {
     await ctx.reply("Для этой операции файл квитанции пока недоступен.");
@@ -138,15 +138,7 @@ export const sendExistingReceipt = async (
   }
 
   await fs.access(operation.imagePath);
-  await ctx.replyWithPhoto(new InputFile(operation.imagePath), {
-    caption: [
-      `Квитанция ${operation.receiptNumber}`,
-      `Дата: ${formatDateTime(operation.createdAt, timeZone)}`,
-      `Услуга: ${operation.serviceTitleSnapshot}`,
-      `Сумма: ${formatAmount(operation.amount)} ₽`,
-      `Форма оплаты: ${formatPaymentMethod(operation.paymentMethod)}`
-    ].join("\n")
-  });
+  await ctx.replyWithPhoto(new InputFile(operation.imagePath));
 
   logger.info({ operationId: operation.id }, "Receipt resent to Telegram");
 };
@@ -196,14 +188,7 @@ export const renderAndSendOperation = async (
       });
     });
 
-    await ctx.replyWithPhoto(new InputFile(renderResult.imagePath), {
-      caption: [
-        `Квитанция ${operation.receiptNumber}`,
-        `Услуга: ${operation.serviceTitleSnapshot}`,
-        `Сумма: ${formatAmount(operation.amount)} ₽`,
-        `Форма оплаты: ${PAYMENT_METHOD_LABELS[operation.paymentMethod]}`
-      ].join("\n")
-    });
+    await ctx.replyWithPhoto(new InputFile(renderResult.imagePath));
 
     await prisma.operation.update({
       where: { id: operation.id },
