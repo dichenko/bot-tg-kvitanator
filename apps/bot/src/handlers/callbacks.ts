@@ -34,7 +34,6 @@ import {
 } from "../services/userService";
 import type { BotContext } from "../types";
 import { clearReceiptDraft } from "../utils/state";
-import { formatPaymentMethod } from "../utils/formatters";
 import { sendMenu } from "../utils/telegram";
 
 const ensureUserAndProfile = async (ctx: BotContext) => {
@@ -176,7 +175,7 @@ const startReceiptFlow = async (ctx: BotContext, userId: number): Promise<void> 
   }
 
   ctx.session.awaitingInput = "receipt_amount";
-  await ctx.reply([`Услуга: «${service.title}»`, `Форма оплаты: ${formatPaymentMethod(paymentMethod)}`, "", "Введите сумму поступления:"].join("\n"));
+  await ctx.reply("Введите сумму поступления:");
 };
 
 export const registerCallbackHandlers = (bot: Bot<BotContext>): void => {
@@ -292,7 +291,7 @@ export const registerCallbackHandlers = (bot: Bot<BotContext>): void => {
 
       if (!ctx.session.receiptDraft.amount) {
         ctx.session.awaitingInput = "receipt_amount";
-        await ctx.reply([`Услуга: «${service.title}»`, `Форма оплаты: ${formatPaymentMethod(paymentMethod)}`, "", "Введите сумму поступления:"].join("\n"));
+        await ctx.reply("Введите сумму поступления:");
         return;
       }
 
@@ -327,7 +326,7 @@ export const registerCallbackHandlers = (bot: Bot<BotContext>): void => {
 
       if (!ctx.session.receiptDraft?.amount) {
         ctx.session.awaitingInput = "receipt_amount";
-        await ctx.reply("Введите сумму:");
+        await ctx.reply("Введите сумму поступления:");
         return;
       }
 
