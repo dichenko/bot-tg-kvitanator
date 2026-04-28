@@ -74,9 +74,9 @@ export const buildReceiptPreviewText = (
 ): string =>
   [
     "<b>Проверьте данные квитанции</b>",
-    `Услуга: ${escapeTelegramHtml(service.title)}`,
-    `Сумма: <code>${escapeTelegramHtml(`${formatAmount(draft.amount)} ₽`)}</code>`,
-    `Форма оплаты: ${escapeTelegramHtml(formatPaymentMethod(draft.paymentMethod))}`
+    `<b>Услуга:</b> ${escapeTelegramHtml(service.title)}`,
+    `<b>Сумма:</b> <code>${escapeTelegramHtml(`${formatAmount(draft.amount)} ₽`)}</code>`,
+    `<b>Форма оплаты:</b> ${escapeTelegramHtml(formatPaymentMethod(draft.paymentMethod))}`
   ].join("\n");
 
 export const createOperationWithSnapshots = async (
