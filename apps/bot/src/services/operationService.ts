@@ -11,10 +11,52 @@ import { formatAmount, formatDateTime, formatPaymentMethod, formatOperationStatu
 import { escapeTelegramHtml } from "../utils/telegram";
 import { renderReceipt } from "./rendererClient";
 
-const createTemporaryReceiptNumber = (): string =>
-  `TMP-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+const RECEIPT_NUMBER_PREFIX = "KV-";
+const RECEIPT_NUMBER_WIDTH = 6;
+const MAX_RECEIPT_NUMBER_RETRIES = 5;
 
-export const buildReceiptNumber = (operationId: number): string => `KV-${String(operationId).padStart(6, "0")}`;
+export const buildReceiptNumber = (sequenceNumber: number): string =>
+  `${RECEIPT_NUMBER_PREFIX}${String(sequenceNumber).padStart(RECEIPT_NUMBER_WIDTH, "0")}`;
+
+const parseReceiptSequenceNumber = (receiptNumber: string): number | null => {
+  const match = receiptNumber.match(/^KV-(\d+)$/);
+
+  if (!match) {
+    return null;
+  }
+
+  const parsed = Number.parseInt(match[1], 10);
+
+  return Number.isInteger(parsed) ? parsed : null;
+};
+
+const getNextReceiptNumberForUser = async (userId: number, tx: Prisma.TransactionClient): Promise<string> => {
+  const latestOperation = await tx.operation.findFirst({
+    where: {
+      userId,
+      receiptNumber: {
+        startsWith: RECEIPT_NUMBER_PREFIX
+      }
+    },
+    orderBy: {
+      receiptNumber: "desc"
+    },
+    select: {
+      receiptNumber: true
+    }
+  });
+
+  const latestSequenceNumber = latestOperation ? (parseReceiptSequenceNumber(latestOperation.receiptNumber) ?? 0) : 0;
+
+  return buildReceiptNumber(latestSequenceNumber + 1);
+};
+
+const isReceiptNumberConflict = (error: unknown): boolean =>
+  error instanceof Prisma.PrismaClientKnownRequestError &&
+  error.code === "P2002" &&
+  Array.isArray(error.meta?.target) &&
+  error.meta.target.includes("userId") &&
+  error.meta.target.includes("receiptNumber");
 
 export const listRecentOperations = async (userId: number): Promise<Operation[]> =>
   prisma.operation.findMany({
@@ -85,45 +127,47 @@ export const createOperationWithSnapshots = async (
   service: Service,
   draft: Required<Pick<ReceiptDraft, "amount" | "paymentMethod">>
 ): Promise<Operation> => {
-  const temporaryReceiptNumber = createTemporaryReceiptNumber();
+  for (let attempt = 0; attempt < MAX_RECEIPT_NUMBER_RETRIES; attempt += 1) {
+    try {
+      return await prisma.$transaction(async (tx) => {
+        const receiptNumber = await getNextReceiptNumberForUser(user.id, tx);
 
-  return prisma.$transaction(async (tx) => {
-    const created = await tx.operation.create({
-      data: {
-        userId: user.id,
-        profileId: profile.id,
-        serviceId: service.id,
-        receiptNumber: temporaryReceiptNumber,
-        innSnapshot: profile.inn,
-        ipFullNameSnapshot: profile.ipFullName,
-        addressSnapshot: profile.address,
-        serviceTitleSnapshot: service.title,
-        amount: new Prisma.Decimal(draft.amount),
-        paymentMethod: draft.paymentMethod,
-        status: OperationStatus.CONFIRMED
+        const operation = await tx.operation.create({
+          data: {
+            userId: user.id,
+            profileId: profile.id,
+            serviceId: service.id,
+            receiptNumber,
+            innSnapshot: profile.inn,
+            ipFullNameSnapshot: profile.ipFullName,
+            addressSnapshot: profile.address,
+            serviceTitleSnapshot: service.title,
+            amount: new Prisma.Decimal(draft.amount),
+            paymentMethod: draft.paymentMethod,
+            status: OperationStatus.RENDERING
+          }
+        });
+
+        await tx.renderJob.create({
+          data: {
+            operationId: operation.id,
+            status: RenderJobStatus.PROCESSING,
+            attempts: 1
+          }
+        });
+
+        return operation;
+      });
+    } catch (error) {
+      if (isReceiptNumberConflict(error) && attempt < MAX_RECEIPT_NUMBER_RETRIES - 1) {
+        continue;
       }
-    });
 
-    const receiptNumber = buildReceiptNumber(created.id);
+      throw error;
+    }
+  }
 
-    const operation = await tx.operation.update({
-      where: { id: created.id },
-      data: {
-        receiptNumber,
-        status: OperationStatus.RENDERING
-      }
-    });
-
-    await tx.renderJob.create({
-      data: {
-        operationId: operation.id,
-        status: RenderJobStatus.PROCESSING,
-        attempts: 1
-      }
-    });
-
-    return operation;
-  });
+  throw new Error("Failed to allocate receipt number for user");
 };
 
 export const sendExistingReceipt = async (
