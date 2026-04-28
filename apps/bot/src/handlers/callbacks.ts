@@ -372,8 +372,8 @@ export const registerCallbackHandlers = (bot: Bot<BotContext>): void => {
       });
 
       logger.info({ operationId: operation.id, userId: user.id }, "Operation created");
-      await ctx.reply(`Квитанция ${operation.receiptNumber} формируется. Подождите несколько секунд.`);
-      await renderAndSendOperation(ctx, user, operation, logger);
+      const pendingMessage = await ctx.reply(`Квитанция ${operation.receiptNumber} формируется. Подождите несколько секунд.`);
+      await renderAndSendOperation(ctx, user, operation, logger, pendingMessage.message_id);
       clearReceiptDraft(ctx.session);
       return;
     }

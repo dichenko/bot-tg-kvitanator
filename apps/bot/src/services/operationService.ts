@@ -147,7 +147,8 @@ export const renderAndSendOperation = async (
   ctx: BotContext,
   user: User,
   operation: Operation,
-  logger: Logger
+  logger: Logger,
+  pendingMessageId?: number
 ): Promise<void> => {
   logger.info({ operationId: operation.id, userId: user.id }, "Render started");
 
@@ -227,5 +228,9 @@ export const renderAndSendOperation = async (
 
     logger.error({ err: error, operationId: operation.id }, "Render failure");
     await ctx.reply("Не удалось сформировать квитанцию. Операция сохранена, попробуйте позже.");
+  } finally {
+    if (pendingMessageId && ctx.chat?.id) {
+      await ctx.api.deleteMessage(ctx.chat.id, pendingMessageId).catch(() => undefined);
+    }
   }
 };
