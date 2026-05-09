@@ -3,6 +3,7 @@ import { createInitialSession } from "../utils/state";
 import { MaxApiClient } from "./client";
 import type { MaxBotContext, MaxUpdate, MaxUser } from "./types";
 import { Prisma, prisma } from "@receipt-bot/db";
+import { logger } from "../services/logger";
 
 const splitName = (name?: string): { firstName?: string; lastName?: string } => {
   if (!name) {
@@ -56,7 +57,20 @@ const getSession = async (key: string): Promise<BotSession> => {
     where: { key }
   });
 
-  return normalizeSession(stored?.data);
+  const session = normalizeSession(stored?.data);
+  logger.info(
+    {
+      sessionKey: key,
+      found: Boolean(stored),
+      awaitingInput: session.awaitingInput,
+      hasRegistrationInn: Boolean(session.registrationDraft.inn),
+      hasRegistrationFullName: Boolean(session.registrationDraft.ipFullName),
+      hasReceiptDraft: Boolean(session.receiptDraft)
+    },
+    "MAX session loaded"
+  );
+
+  return session;
 };
 
 const saveSession = async (key: string, session: BotSession): Promise<void> => {
@@ -70,12 +84,32 @@ const saveSession = async (key: string, session: BotSession): Promise<void> => {
       data: session as unknown as Prisma.InputJsonValue
     }
   });
+  logger.info(
+    {
+      sessionKey: key,
+      awaitingInput: session.awaitingInput,
+      hasRegistrationInn: Boolean(session.registrationDraft.inn),
+      hasRegistrationFullName: Boolean(session.registrationDraft.ipFullName),
+      hasReceiptDraft: Boolean(session.receiptDraft)
+    },
+    "MAX session saved"
+  );
 };
 
 export const createMaxContext = async (client: MaxApiClient, update: MaxUpdate): Promise<MaxBotContext | null> => {
-  const user = normalizeUser(update.message?.sender ?? update.callback?.user ?? update.user);
+  const rawUser = update.message?.sender ?? update.callback?.user ?? update.user;
+  const user = normalizeUser(rawUser);
 
   if (!user) {
+    logger.warn(
+      {
+        updateType: update.update_type,
+        topLevelUserId: update.user?.user_id,
+        messageSenderId: update.message?.sender?.user_id,
+        callbackUserId: update.callback?.user?.user_id
+      },
+      "MAX context skipped without user"
+    );
     return null;
   }
 
@@ -85,6 +119,20 @@ export const createMaxContext = async (client: MaxApiClient, update: MaxUpdate):
   const target = chatId ? { chatId } : { userId: user.id };
   let callbackAnswered = false;
   const callbackId = update.callback?.callback_id;
+
+  logger.info(
+    {
+      updateType: update.update_type,
+      userId: user.id,
+      chatId,
+      sessionKey,
+      target,
+      callbackId: callbackId ? "present" : "absent",
+      textLength: update.message?.body?.text?.length ?? 0,
+      callbackPayload: update.callback?.payload
+    },
+    "MAX context created"
+  );
 
   const acknowledgeCallback = async (): Promise<void> => {
     if (!callbackId || callbackAnswered) {

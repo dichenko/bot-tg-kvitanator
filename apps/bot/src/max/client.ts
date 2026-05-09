@@ -13,6 +13,10 @@ type UploadResponse = {
   token?: string;
 };
 
+type SubscriptionResponse = {
+  subscriptions?: Array<string | { url?: string }>;
+};
+
 const API_BASE_URL = "https://platform-api.max.ru";
 
 const toInlineKeyboardAttachment = (keyboard: MaxKeyboard) => ({
@@ -57,6 +61,24 @@ export class MaxApiClient {
         update_types: input.updateTypes,
         ...(input.secret ? { secret: input.secret } : {})
       }
+    });
+  }
+
+  async listSubscriptions(): Promise<string[]> {
+    const response = await this.request<SubscriptionResponse | Array<string | { url?: string }>>("/subscriptions", {
+      method: "GET"
+    });
+    const subscriptions = Array.isArray(response) ? response : response.subscriptions ?? [];
+
+    return subscriptions
+      .map((subscription) => (typeof subscription === "string" ? subscription : subscription.url))
+      .filter((url): url is string => Boolean(url));
+  }
+
+  async deleteSubscription(url: string): Promise<void> {
+    await this.request("/subscriptions", {
+      method: "DELETE",
+      query: { url }
     });
   }
 

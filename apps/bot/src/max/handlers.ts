@@ -715,6 +715,24 @@ export const handleMaxUpdate = async (client: MaxApiClient, update: MaxUpdate): 
     return;
   }
 
+  const sessionBefore = {
+    awaitingInput: ctx.session.awaitingInput,
+    hasRegistrationInn: Boolean(ctx.session.registrationDraft.inn),
+    hasRegistrationFullName: Boolean(ctx.session.registrationDraft.ipFullName),
+    hasReceiptDraft: Boolean(ctx.session.receiptDraft)
+  };
+
+  logger.info(
+    {
+      updateType: update.update_type,
+      userId: ctx.user.id,
+      textLength: update.message?.body?.text?.length ?? 0,
+      callbackPayload: update.callback?.payload,
+      sessionBefore
+    },
+    "MAX update handling started"
+  );
+
   try {
     if (update.update_type === "bot_started") {
       await goToMainFlow(ctx);
@@ -744,6 +762,19 @@ export const handleMaxUpdate = async (client: MaxApiClient, update: MaxUpdate): 
       await handleCallback(ctx, payload);
     }
   } finally {
+    logger.info(
+      {
+        updateType: update.update_type,
+        userId: ctx.user.id,
+        sessionAfter: {
+          awaitingInput: ctx.session.awaitingInput,
+          hasRegistrationInn: Boolean(ctx.session.registrationDraft.inn),
+          hasRegistrationFullName: Boolean(ctx.session.registrationDraft.ipFullName),
+          hasReceiptDraft: Boolean(ctx.session.receiptDraft)
+        }
+      },
+      "MAX update handling finished"
+    );
     await ctx.saveSession();
   }
 };

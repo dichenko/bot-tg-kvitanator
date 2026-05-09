@@ -14,11 +14,24 @@ export const createMaxClient = (): MaxApiClient => new MaxApiClient(config.maxBo
 export const registerMaxWebhook = (app: Express, client: MaxApiClient): void => {
   app.post(config.maxWebhookPath, async (req: Request, res: Response) => {
     if (config.maxWebhookSecret && req.header("X-Max-Bot-Api-Secret") !== config.maxWebhookSecret) {
+      logger.warn({ updateType: req.body?.update_type }, "MAX webhook rejected by secret check");
       res.status(401).json({ ok: false });
       return;
     }
 
     res.status(200).json({ ok: true });
+    logger.info(
+      {
+        updateType: req.body?.update_type,
+        hasSecretHeader: Boolean(req.header("X-Max-Bot-Api-Secret")),
+        messageSenderId: req.body?.message?.sender?.user_id,
+        callbackUserId: req.body?.callback?.user?.user_id,
+        topLevelUserId: req.body?.user?.user_id,
+        textLength: req.body?.message?.body?.text?.length ?? 0,
+        callbackPayload: req.body?.callback?.payload
+      },
+      "MAX webhook accepted"
+    );
 
     try {
       await handleMaxUpdate(client, req.body as MaxUpdate);
@@ -34,12 +47,21 @@ export const ensureMaxWebhook = async (client: MaxApiClient): Promise<void> => {
   while (true) {
     try {
       attempt += 1;
+      const subscriptions = await client.listSubscriptions();
+
+      for (const subscription of subscriptions) {
+        await client.deleteSubscription(subscription);
+      }
+
       await client.createSubscription({
         url: config.maxWebhookUrl,
         updateTypes: ["bot_started", "message_created", "message_callback"],
         secret: config.maxWebhookSecret
       });
-      logger.info({ webhookUrl: config.maxWebhookUrl, attempt }, "MAX webhook configured");
+      logger.info(
+        { webhookUrl: config.maxWebhookUrl, attempt, deletedSubscriptions: subscriptions.length },
+        "MAX webhook configured"
+      );
       return;
     } catch (error) {
       const delayMs = Math.min(60_000, 5_000 * attempt);
