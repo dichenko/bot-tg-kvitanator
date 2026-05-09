@@ -97,7 +97,7 @@ const saveSession = async (key: string, session: BotSession): Promise<void> => {
 };
 
 export const createMaxContext = async (client: MaxApiClient, update: MaxUpdate): Promise<MaxBotContext | null> => {
-  const rawUser = update.message?.sender ?? update.callback?.user ?? update.user;
+  const rawUser = update.callback?.user ?? update.message?.sender ?? update.user;
   const user = normalizeUser(rawUser);
 
   if (!user) {
