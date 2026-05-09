@@ -46,6 +46,15 @@ model User {
   @@map("users")
 }
 
+model ConversationSession {
+  key       String   @id @db.VarChar(128)
+  data      Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("conversation_sessions")
+}
+
 model EntrepreneurProfile {
   id         Int       @id @default(autoincrement())
   userId     Int       @unique

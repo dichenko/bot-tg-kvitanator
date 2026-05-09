@@ -708,38 +708,42 @@ const handleCallback = async (ctx: MaxBotContext, data: string): Promise<void> =
 };
 
 export const handleMaxUpdate = async (client: MaxApiClient, update: MaxUpdate): Promise<void> => {
-  const ctx = createMaxContext(client, update);
+  const ctx = await createMaxContext(client, update);
 
   if (!ctx) {
     logger.warn({ updateType: update.update_type }, "MAX update skipped without user");
     return;
   }
 
-  if (update.update_type === "bot_started") {
-    await goToMainFlow(ctx);
-    return;
-  }
-
-  if (update.update_type === "message_created") {
-    const text = ensureText(update);
-
-    if (!text) {
-      await ctx.reply("Пока поддерживаются только текстовые сообщения и кнопки меню.", { keyboard: mainMenuKeyboard() });
+  try {
+    if (update.update_type === "bot_started") {
+      await goToMainFlow(ctx);
       return;
     }
 
-    await handleTextMessage(ctx, text);
-    return;
-  }
+    if (update.update_type === "message_created") {
+      const text = ensureText(update);
 
-  if (update.update_type === "message_callback") {
-    const payload = update.callback?.payload;
+      if (!text) {
+        await ctx.reply("Пока поддерживаются только текстовые сообщения и кнопки меню.", { keyboard: mainMenuKeyboard() });
+        return;
+      }
 
-    if (!payload) {
-      await ctx.reply("Неизвестное действие.", { keyboard: mainMenuKeyboard() });
+      await handleTextMessage(ctx, text);
       return;
     }
 
-    await handleCallback(ctx, payload);
+    if (update.update_type === "message_callback") {
+      const payload = update.callback?.payload;
+
+      if (!payload) {
+        await ctx.reply("Неизвестное действие.", { keyboard: mainMenuKeyboard() });
+        return;
+      }
+
+      await handleCallback(ctx, payload);
+    }
+  } finally {
+    await ctx.saveSession();
   }
 };

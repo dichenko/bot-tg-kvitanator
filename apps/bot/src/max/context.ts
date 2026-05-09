@@ -2,8 +2,7 @@ import type { BotSession } from "../types";
 import { createInitialSession } from "../utils/state";
 import { MaxApiClient } from "./client";
 import type { MaxBotContext, MaxUpdate, MaxUser } from "./types";
-
-const sessions = new Map<string, BotSession>();
+import { Prisma, prisma } from "@receipt-bot/db";
 
 const splitName = (name?: string): { firstName?: string; lastName?: string } => {
   if (!name) {
@@ -32,19 +31,48 @@ const normalizeUser = (user?: MaxUser): MaxBotContext["user"] | null => {
   };
 };
 
-const getSession = (key: string): BotSession => {
-  const existing = sessions.get(key);
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
 
-  if (existing) {
-    return existing;
+const normalizeSession = (value: unknown): BotSession => {
+  const initial = createInitialSession();
+
+  if (!isObject(value)) {
+    return initial;
   }
 
-  const created = createInitialSession();
-  sessions.set(key, created);
-  return created;
+  return {
+    awaitingInput:
+      value.awaitingInput === null || typeof value.awaitingInput === "string"
+        ? (value.awaitingInput as BotSession["awaitingInput"])
+        : initial.awaitingInput,
+    registrationDraft: isObject(value.registrationDraft) ? value.registrationDraft : initial.registrationDraft,
+    receiptDraft: isObject(value.receiptDraft) ? value.receiptDraft : null
+  };
 };
 
-export const createMaxContext = (client: MaxApiClient, update: MaxUpdate): MaxBotContext | null => {
+const getSession = async (key: string): Promise<BotSession> => {
+  const stored = await prisma.conversationSession.findUnique({
+    where: { key }
+  });
+
+  return normalizeSession(stored?.data);
+};
+
+const saveSession = async (key: string, session: BotSession): Promise<void> => {
+  await prisma.conversationSession.upsert({
+    where: { key },
+    create: {
+      key,
+      data: session as unknown as Prisma.InputJsonValue
+    },
+    update: {
+      data: session as unknown as Prisma.InputJsonValue
+    }
+  });
+};
+
+export const createMaxContext = async (client: MaxApiClient, update: MaxUpdate): Promise<MaxBotContext | null> => {
   const user = normalizeUser(update.message?.sender ?? update.callback?.user ?? update.user);
 
   if (!user) {
@@ -52,7 +80,8 @@ export const createMaxContext = (client: MaxApiClient, update: MaxUpdate): MaxBo
   }
 
   const chatId = update.chat_id ?? update.message?.recipient?.chat_id ?? update.callback?.message?.recipient?.chat_id;
-  const session = getSession(`max:${user.id}`);
+  const sessionKey = `max:${user.id}`;
+  const session = await getSession(sessionKey);
   const target = chatId ? { chatId } : { userId: user.id };
   let callbackAnswered = false;
   const callbackId = update.callback?.callback_id;
@@ -105,6 +134,9 @@ export const createMaxContext = (client: MaxApiClient, update: MaxUpdate): MaxBo
     },
     async deleteMessage() {
       await acknowledgeCallback();
+    },
+    async saveSession() {
+      await saveSession(sessionKey, session);
     }
   };
 };

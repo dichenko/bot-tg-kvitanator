@@ -68,4 +68,5 @@ export type MaxBotContext = {
   sendImage(filePath: string): Promise<void>;
   sendDocument(filePath: string, fileName: string, caption?: string): Promise<void>;
   deleteMessage(messageId?: number): Promise<void>;
+  saveSession(): Promise<void>;
 };
