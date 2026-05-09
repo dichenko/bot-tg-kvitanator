@@ -18,6 +18,14 @@ type SubscriptionResponse = {
 };
 
 const API_BASE_URL = "https://platform-api.max.ru";
+const ATTACHMENT_NOT_READY_RETRY_DELAYS_MS = [1_000, 2_000, 4_000, 8_000, 12_000];
+
+const sleep = async (ms: number): Promise<void> => {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+};
+
+const isAttachmentNotReadyError = (error: unknown): boolean =>
+  error instanceof Error && error.message.includes("attachment.not.ready");
 
 const toInlineKeyboardAttachment = (keyboard: MaxKeyboard) => ({
   type: "inline_keyboard",
@@ -114,7 +122,7 @@ export class MaxApiClient {
   ): Promise<void> {
     const payload = await this.upload(filePath, type);
 
-    await this.request("/messages", {
+    const request = {
       method: "POST",
       query: {
         user_id: target.userId,
@@ -124,7 +132,22 @@ export class MaxApiClient {
         text: text ?? null,
         attachments: [{ type, payload }]
       }
-    });
+    } satisfies RequestOptions;
+
+    for (let attempt = 0; attempt <= ATTACHMENT_NOT_READY_RETRY_DELAYS_MS.length; attempt += 1) {
+      try {
+        await this.request("/messages", request);
+        return;
+      } catch (error) {
+        const delayMs = ATTACHMENT_NOT_READY_RETRY_DELAYS_MS[attempt];
+
+        if (!isAttachmentNotReadyError(error) || delayMs === undefined) {
+          throw error;
+        }
+
+        await sleep(delayMs);
+      }
+    }
   }
 
   private buildMessageBody(text: string, options: MaxMessageOptions): Record<string, unknown> {
