@@ -32,7 +32,8 @@ enum RenderJobStatus {
 
 model User {
   id          Int                  @id @default(autoincrement())
-  telegramId  BigInt               @unique
+  telegramId  BigInt?              @unique
+  maxId       BigInt?              @unique
   username    String?              @db.VarChar(64)
   firstName   String?              @db.VarChar(128)
   lastName    String?              @db.VarChar(128)

@@ -5,6 +5,7 @@ import { createBot } from "./bot";
 import { config } from "./config";
 import { logger } from "./services/logger";
 import type { BotContext } from "./types";
+import { createMaxClient, ensureMaxWebhook, registerMaxWebhook } from "./max/webhook";
 
 const sleep = async (ms: number): Promise<void> => {
   await new Promise((resolve) => setTimeout(resolve, ms));
@@ -29,17 +30,25 @@ const ensureWebhook = async (bot: Bot<BotContext>): Promise<void> => {
 
 const start = async (): Promise<void> => {
   const bot = createBot();
+  const maxClient = config.maxEnabled ? createMaxClient() : null;
 
   if (config.botMode === "polling") {
-    await bot.start({
-      onStart: async () => {
-        logger.info("Bot started in polling mode");
-      }
-    });
-    return;
-  }
+    void bot
+      .start({
+        onStart: async () => {
+          logger.info("Bot started in polling mode");
+        }
+      })
+      .catch((error) => {
+        logger.error({ err: error }, "Polling bot failed");
+      });
 
-  await bot.init();
+    if (!maxClient) {
+      return;
+    }
+  } else {
+    await bot.init();
+  }
 
   const app = express();
   app.use(express.json({ limit: "1mb" }));
@@ -54,13 +63,25 @@ const start = async (): Promise<void> => {
     }
   });
 
-  app.post(config.webhookPath, webhookCallback(bot, "express"));
+  if (config.botMode === "webhook") {
+    app.post(config.webhookPath, webhookCallback(bot, "express"));
+  }
+
+  if (maxClient) {
+    registerMaxWebhook(app, maxClient);
+  }
 
   app.listen(config.botPort, () => {
     logger.info({ port: config.botPort, mode: config.botMode }, "Bot HTTP server started");
   });
 
-  void ensureWebhook(bot);
+  if (config.botMode === "webhook") {
+    void ensureWebhook(bot);
+  }
+
+  if (maxClient) {
+    void ensureMaxWebhook(maxClient);
+  }
 };
 
 start().catch((error) => {

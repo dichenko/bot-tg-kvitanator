@@ -8,6 +8,13 @@ type TelegramUserInput = {
   last_name?: string;
 };
 
+type MaxUserInput = {
+  id: number;
+  username?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+};
+
 export const upsertTelegramUser = async (telegramUser: TelegramUserInput): Promise<User> =>
   prisma.user.upsert({
     where: {
@@ -23,6 +30,24 @@ export const upsertTelegramUser = async (telegramUser: TelegramUserInput): Promi
       username: telegramUser.username ?? null,
       firstName: telegramUser.first_name ?? null,
       lastName: telegramUser.last_name ?? null
+    }
+  });
+
+export const upsertMaxUser = async (maxUser: MaxUserInput): Promise<User> =>
+  prisma.user.upsert({
+    where: {
+      maxId: BigInt(maxUser.id)
+    },
+    create: {
+      maxId: BigInt(maxUser.id),
+      username: maxUser.username ?? null,
+      firstName: maxUser.firstName ?? null,
+      lastName: maxUser.lastName ?? null
+    },
+    update: {
+      username: maxUser.username ?? null,
+      firstName: maxUser.firstName ?? null,
+      lastName: maxUser.lastName ?? null
     }
   });
 

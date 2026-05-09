@@ -1,6 +1,8 @@
-# Telegram Receipt Bot
+# Telegram/MAX Receipt Bot
 
-MVP Telegram bot for individual entrepreneurs that registers incoming payments, generates internal receipt images, stores operations in PostgreSQL, and exports operations to Excel.
+MVP messenger bot for individual entrepreneurs that registers incoming payments, generates internal receipt images, stores operations in PostgreSQL, and exports operations to Excel.
+
+The current production channel is Telegram. MAX can be enabled as an additional channel without disabling Telegram.
 
 This project does not generate fiscal receipts and does not integrate with online cash registers or OFD services. The generated document is an internal receipt (`Квитанция`).
 
@@ -13,6 +15,7 @@ Implementation progress is tracked in [CHECKPOINTS.md](CHECKPOINTS.md).
 - Node.js 20+
 - TypeScript
 - grammY
+- MAX Bot API
 - PostgreSQL 16
 - Prisma
 - Playwright
@@ -167,10 +170,28 @@ The import uses the current entrepreneur profile from the database for `ИНН`,
 ## Webhook notes
 
 - Production mode uses `BOT_MODE=webhook`.
-- The bot exposes `WEBHOOK_PATH` on `BOT_PORT`.
+- The Telegram bot exposes `WEBHOOK_PATH` on `BOT_PORT`.
 - `WEBHOOK_URL` must point to the public HTTPS domain proxied by Caddy.
 - The DNS record for the domain must resolve to the VPS before calling `setWebhook`.
 - `RENDERER_URL` intentionally uses `http://renderer-worker:3001` because it is an internal Docker-network call, not a public endpoint.
+
+## MAX channel
+
+MAX is optional and disabled by default.
+
+Required settings:
+
+```env
+ENABLE_MAX=true
+MAX_BOT_TOKEN=replace_me
+MAX_WEBHOOK_URL=https://your-domain.com/webhook/max
+MAX_WEBHOOK_PATH=/webhook/max
+MAX_WEBHOOK_SECRET=replace-me
+```
+
+MAX webhook endpoints must be public HTTPS on port 443. A separate subdomain is not required if the existing bot domain is already served through Caddy over HTTPS; a separate path like `/webhook/max` is enough. Use a separate subdomain only if you want to isolate routing, logs, or certificates.
+
+Existing Telegram users are preserved by an additive database migration. New MAX users get their own `maxId`; Telegram history and generated receipt files are not modified.
 
 ## Main test flows
 
