@@ -17,7 +17,7 @@ type SubscriptionResponse = {
   subscriptions?: Array<string | { url?: string }>;
 };
 
-const API_BASE_URL = "https://platform-api.max.ru";
+const API_BASE_URL = "https://platform-api2.max.ru";
 const ATTACHMENT_NOT_READY_RETRY_DELAYS_MS = [1_000, 2_000, 4_000, 8_000, 12_000];
 
 const sleep = async (ms: number): Promise<void> => {
