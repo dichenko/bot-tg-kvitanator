@@ -305,6 +305,20 @@
         margin-top: 10px;
       }
 
+      .calculation-line {
+        font-size: 13px;
+        color: var(--text-main);
+        margin-top: 5px;
+      }
+
+      .calculation-line:first-child {
+        margin-top: 0;
+      }
+
+      .calculation-line-label {
+        color: var(--text-muted);
+      }
+
       .signature-line {
         margin-top: 5px;
         padding-bottom: 4px;
@@ -450,10 +464,8 @@
             </div>
 
             <div class="pay-form-block">
-              <div class="field-label">Форма расчёта</div>
-              <div class="field-value">{{paymentMethodLabel}}</div>
-              <div class="field-label" style="margin-top: 8px">Признак расчёта</div>
-              <div class="field-value">{{calculationTypeLabel}}</div>
+              <div class="calculation-line"><span class="calculation-line-label">Форма расчёта:</span> {{paymentMethodLabel}}</div>
+              <div class="calculation-line"><span class="calculation-line-label">Признак расчёта:</span> {{calculationTypeLabel}}</div>
             </div>
           </div>
 
@@ -472,7 +484,7 @@
           </div>
         </div>
 
-        <div class="footer-note">Сформировано сервисом «Квитанатор»</div>
+        <div class="footer-note">Сформировано сервисом «Квитанатор» · kvitanator.ru</div>
       </div>
     </div>
   </body>
