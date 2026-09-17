@@ -1,4 +1,4 @@
-import { InlineKeyboard, type Bot } from "grammy";
+import { InlineKeyboard, InputFile, type Bot } from "grammy";
 import type { PaymentMethod } from "@receipt-bot/db";
 import type { ExportRangeKey } from "@receipt-bot/shared";
 import { config } from "../config";
@@ -25,7 +25,7 @@ export const registerCallbackHandlers = (bot: Bot<BotContext>): void => { bot.on
   if (data === "menu:profile") return void await sendMenu(ctx, [`ИНН: ${profile.inn}`, `ОГРН: ${profile.ogrn ?? "не указан"}`, `ИП: ${profile.ipFullName}`, `Адрес оказания услуги: ${profile.address}`].join("\n"), profileKeyboard());
   if (data === "menu:services") return void await showServices(ctx, user.id);
   if (data === "menu:operations") return void await showOps(ctx, user.id);
-  if (data === "menu:export") { const operations = await getOperationsForExport(user.id, "all_time" as ExportRangeKey, config.timezone); const f = await buildExportFile(operations, { userId: user.id, rangeKey: "all_time", exportsDir: config.exportsDir, timeZone: config.timezone }); await ctx.replyWithDocument(f.filePath); return; }
+  if (data === "menu:export") { const operations = await getOperationsForExport(user.id, "all_time" as ExportRangeKey, config.timezone); const f = await buildExportFile(operations, { userId: user.id, rangeKey: "all_time", exportsDir: config.exportsDir, timeZone: config.timezone }); await ctx.replyWithDocument(new InputFile(f.filePath, f.fileName), { caption: `Excel-выгрузка готова: ${f.fileName}` }); return; }
   if (data === "menu:receipt:new") { const last = await getLatestOperationForUser(user.id); ctx.session.receiptDraft = { items: [], paymentMethod: last?.paymentMethod ?? "BANK_TRANSFER", calculationType: "INCOME", submitted: false }; return void await selectService(ctx, user.id); }
   if (data.startsWith("profile:edit:")) { const field = data.split(":").pop(); const map: Record<string, [any, string]> = { inn: ["profile_edit_inn", "Введите новый ИНН:"], full_name: ["profile_edit_full_name", "Введите новое ФИО ИП:"], address: ["profile_edit_address", "Введите новый адрес оказания услуги:"], ogrn: ["profile_edit_ogrn", "Введите ОГРН или отправьте «-», чтобы очистить:"] }; const v = map[field ?? ""]; if (v) { ctx.session.awaitingInput = v[0]; return void await ctx.reply(v[1]); } }
   if (data === "service:add") { ctx.session.awaitingInput = "service_add"; return void await ctx.reply("Введите название услуги:"); }
