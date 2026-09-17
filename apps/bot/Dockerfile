@@ -1,6 +1,10 @@
 FROM node:20-bookworm-slim AS base
 WORKDIR /app
-RUN apt-get update -y && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apt-get update -y && apt-get install -y --no-install-recommends openssl ca-certificates curl \
+  && curl -fsSL https://gu-st.ru/content/lending/russian_trusted_root_ca_pem.crt -o /usr/local/share/ca-certificates/russian-trusted-root-ca.crt \
+  && curl -fsSL https://gu-st.ru/content/lending/russian_trusted_sub_ca_pem.crt -o /usr/local/share/ca-certificates/russian-trusted-sub-ca.crt \
+  && update-ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
 RUN corepack enable
 
 FROM base AS deps
@@ -19,7 +23,12 @@ RUN pnpm --filter @receipt-bot/bot build
 
 FROM node:20-bookworm-slim AS runtime
 WORKDIR /app
-RUN apt-get update -y && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apt-get update -y && apt-get install -y --no-install-recommends openssl ca-certificates curl \
+  && curl -fsSL https://gu-st.ru/content/lending/russian_trusted_root_ca_pem.crt -o /usr/local/share/ca-certificates/russian-trusted-root-ca.crt \
+  && curl -fsSL https://gu-st.ru/content/lending/russian_trusted_sub_ca_pem.crt -o /usr/local/share/ca-certificates/russian-trusted-sub-ca.crt \
+  && update-ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/apps/bot/node_modules ./apps/bot/node_modules
 COPY --from=build /app/packages/db/node_modules ./packages/db/node_modules
