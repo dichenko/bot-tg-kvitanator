@@ -5,6 +5,7 @@ import { OperationStatus, prisma } from "@receipt-bot/db";
 import type { Operation } from "@receipt-bot/db";
 import type { ExportRangeKey } from "@receipt-bot/shared";
 import { DateTime } from "luxon";
+import { CALCULATION_TYPE_LABELS } from "@receipt-bot/shared";
 import { formatAmount, formatPaymentMethod, formatOperationStatus } from "../utils/formatters";
 
 const buildRange = (
@@ -83,6 +84,7 @@ export const buildExportFile = async (
     { header: "Адрес", key: "address", width: 32 },
     { header: "Услуга", key: "service", width: 28 },
     { header: "Сумма", key: "amount", width: 14 },
+    { header: "Признак расчёта", key: "calculationType", width: 22 },
     { header: "Форма оплаты", key: "paymentMethod", width: 18 },
     { header: "Статус", key: "status", width: 18 },
   ];
@@ -96,6 +98,7 @@ export const buildExportFile = async (
       address: operation.addressSnapshot,
       service: operation.serviceTitleSnapshot,
       amount: Number(operation.amount),
+      calculationType: CALCULATION_TYPE_LABELS[operation.calculationType],
       paymentMethod: formatPaymentMethod(operation.paymentMethod),
       status: formatOperationStatus(operation.status)
     });
