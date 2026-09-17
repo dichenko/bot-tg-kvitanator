@@ -48,7 +48,7 @@ const normalizeSession = (value: unknown): BotSession => {
         ? (value.awaitingInput as BotSession["awaitingInput"])
         : initial.awaitingInput,
     registrationDraft: isObject(value.registrationDraft) ? value.registrationDraft : initial.registrationDraft,
-    receiptDraft: isObject(value.receiptDraft) ? value.receiptDraft : null
+    receiptDraft: isObject(value.receiptDraft) && Array.isArray(value.receiptDraft.items) ? (value.receiptDraft as unknown as BotSession["receiptDraft"]) : null
   };
 };
 

@@ -58,7 +58,7 @@ export const getProfileByUserId = async (userId: number): Promise<EntrepreneurPr
 
 export const upsertProfile = async (
   userId: number,
-  input: { inn: string; ipFullName: string; address: string }
+  input: { inn: string; ipFullName: string; address: string; ogrn?: string }
 ): Promise<EntrepreneurProfile> =>
   prisma.entrepreneurProfile.upsert({
     where: { userId },
@@ -67,17 +67,19 @@ export const upsertProfile = async (
       inn: input.inn,
       ipFullName: input.ipFullName,
       address: input.address
+      ,ogrn: input.ogrn || null
     },
     update: {
       inn: input.inn,
       ipFullName: input.ipFullName,
       address: input.address
+      ,ogrn: input.ogrn || null
     }
   });
 
 export const updateProfileField = async (
   userId: number,
-  field: "inn" | "ipFullName" | "address",
+  field: "inn" | "ipFullName" | "address" | "ogrn",
   value: string
 ): Promise<EntrepreneurProfile> =>
   prisma.entrepreneurProfile.update({

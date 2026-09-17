@@ -1,4 +1,4 @@
-import type { Operation, PaymentMethod, Service } from "@receipt-bot/db";
+import type { Operation, PaymentMethod, ReceiptCalculationType, Service } from "@receipt-bot/db";
 import { InlineKeyboard } from "grammy";
 
 export const mainMenuKeyboard = (): InlineKeyboard =>
@@ -20,6 +20,8 @@ export const profileKeyboard = (): InlineKeyboard =>
     .text("✏️ Изменить ФИО ИП", "profile:edit:full_name")
     .row()
     .text("✏️ Изменить адрес", "profile:edit:address")
+    .row()
+    .text("✏️ Изменить ОГРН", "profile:edit:ogrn")
     .row()
     .text("⬅️ Назад", "menu:main");
 
@@ -59,15 +61,18 @@ export const paymentMethodKeyboard = (): InlineKeyboard =>
     .row()
     .text("❌ Отмена", "receipt:cancel");
 
-export const receiptPreviewKeyboard = (currentPaymentMethod: PaymentMethod): InlineKeyboard => {
+export const receiptPreviewKeyboard = (currentPaymentMethod: PaymentMethod, calculationType: ReceiptCalculationType): InlineKeyboard => {
   const nextPaymentMethod = currentPaymentMethod === "CASH" ? "BANK_TRANSFER" : "CASH";
   const toggleLabel = currentPaymentMethod === "CASH" ? "🏦 Безнал" : "💵 Нал";
 
   return new InlineKeyboard()
     .text("✅ Сгенерировать квитанцию", "receipt:confirm")
     .row()
-    .text("🧾 Услуга", "receipt:change:service")
-    .text("💰 Сумма", "receipt:change:amount")
+    .text("➕ Добавить услугу", "receipt:add:item")
+    .text("💰 Цена", "receipt:change:price")
+    .row()
+    .text("🔢 Количество", "receipt:change:quantity")
+    .text(`Признак: ${calculationType === "INCOME" ? "Приход" : "Возврат прихода"}`, "receipt:toggle:calculation")
     .row()
     .text(toggleLabel, `receipt:payment:${nextPaymentMethod}`)
     .text("❌ Отмена", "receipt:cancel");
@@ -77,11 +82,11 @@ export const operationsKeyboard = (operations: Operation[]): InlineKeyboard => {
   const keyboard = new InlineKeyboard();
 
   operations
-    .filter((operation) => Boolean(operation.imagePath))
     .forEach((operation) => {
-      keyboard.text(`📤 ${operation.receiptNumber}`, `history:resend:${operation.id}`).row();
+      keyboard.text(`👁 Показать ${operation.receiptNumber}`, `history:show:${operation.id}`).text("🗑 Удалить", `history:delete:${operation.id}`).row();
     });
-
-  keyboard.text("⬅️ Назад", "menu:main");
+  keyboard.text("⬅️ Вернуться в меню", "menu:main");
   return keyboard;
 };
+
+export const deleteOperationConfirmKeyboard = (id: number): InlineKeyboard => new InlineKeyboard().text("🗑 Удалить", `history:delete:confirm:${id}`).text("❌ Отмена", "menu:operations");

@@ -20,6 +20,19 @@ export const validateInn = (value: string): { valid: boolean; warning?: string; 
   };
 };
 
+export const validateOgrn = (value: string): string => {
+  const normalized = value.trim();
+  if (!normalized) return "";
+  if (!/^\d{13}(\d{2})?$/.test(normalized)) throw new Error("ОГРН должен содержать 13 или 15 цифр.");
+  return normalized;
+};
+
+export const parseQuantityInput = (value: string): string => {
+  const normalized = value.trim().replace(",", ".");
+  if (!/^\d+([.]\d{1,3})?$/.test(normalized) || Number(normalized) <= 0) throw new Error("Количество должно быть положительным числом.");
+  return Number(normalized).toFixed(3).replace(/\.?(0+)$/, "");
+};
+
 export const validateRequiredText = (value: string, fieldName: string, maxLength = MAX_TEXT_LENGTH): string => {
   const normalized = value.trim();
 

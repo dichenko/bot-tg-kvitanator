@@ -5,6 +5,7 @@ import { chromium } from "playwright";
 import { DateTime } from "luxon";
 import type { RenderReceiptRequest } from "@receipt-bot/shared";
 import { PAYMENT_METHOD_LABELS } from "@receipt-bot/shared";
+import { CALCULATION_TYPE_LABELS } from "@receipt-bot/shared";
 
 let compiledTemplate: Handlebars.TemplateDelegate | null = null;
 
@@ -49,14 +50,16 @@ export const renderReceiptImage = async (
     receiptNumber: payload.receiptNumber,
     createdAt: DateTime.fromISO(payload.createdAt).setZone(options.timeZone).toFormat("dd.LL.yyyy HH:mm"),
     inn: payload.inn,
+    ogrn: payload.ogrn,
     ipFullName: payload.ipFullName,
     address: payload.address,
-    serviceTitle: payload.serviceTitle,
+    items: payload.items.map((item) => ({ ...item, quantity: Number(item.quantity).toLocaleString("ru-RU"), price: Number(item.price).toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 }), amount: Number(item.amount).toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) })),
     amount: Number(payload.amount).toLocaleString("ru-RU", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
     }),
-    paymentMethodLabel: PAYMENT_METHOD_LABELS[payload.paymentMethod]
+    paymentMethodLabel: PAYMENT_METHOD_LABELS[payload.paymentMethod],
+    calculationTypeLabel: CALCULATION_TYPE_LABELS[payload.calculationType]
   });
 
   const browser = await chromium.launch({ headless: true });

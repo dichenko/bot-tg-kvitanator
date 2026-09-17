@@ -8,7 +8,7 @@ export const createInitialSession = (): BotSession => ({
 
 export const clearReceiptDraft = (session: BotSession): void => {
   session.receiptDraft = null;
-  if (session.awaitingInput === "receipt_amount") {
+  if (session.awaitingInput === "receipt_price" || session.awaitingInput === "receipt_quantity") {
     session.awaitingInput = null;
   }
 };

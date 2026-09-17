@@ -10,9 +10,11 @@ const payloadSchema = z.object({
   receiptNumber: z.string().min(1),
   createdAt: z.string().datetime(),
   inn: z.string().min(1),
+  ogrn: z.string().nullable().optional(),
   ipFullName: z.string().min(1),
   address: z.string().min(1),
-  serviceTitle: z.string().min(1),
+  calculationType: z.enum(["INCOME", "INCOME_RETURN"]),
+  items: z.array(z.object({ title: z.string().min(1), quantity: z.string().min(1), price: z.string().min(1), amount: z.string().min(1) })).min(1),
   amount: z.string().min(1),
   paymentMethod: z.enum(["CASH", "BANK_TRANSFER"])
 });

@@ -1,397 +1,47 @@
-import { InputFile, InlineKeyboard, type Bot } from "grammy";
+import { InlineKeyboard, type Bot } from "grammy";
 import type { PaymentMethod } from "@receipt-bot/db";
 import type { ExportRangeKey } from "@receipt-bot/shared";
 import { config } from "../config";
-import {
-  deleteServiceConfirmKeyboard,
-  mainMenuKeyboard,
-  operationsKeyboard,
-  paymentMethodKeyboard,
-  profileKeyboard,
-  receiptPreviewKeyboard,
-  serviceSelectionKeyboard,
-  servicesKeyboard
-} from "../keyboards";
+import { deleteOperationConfirmKeyboard, deleteServiceConfirmKeyboard, mainMenuKeyboard, operationsKeyboard, paymentMethodKeyboard, profileKeyboard, receiptPreviewKeyboard, serviceSelectionKeyboard, servicesKeyboard } from "../keyboards";
 import { startRegistration } from "./commands";
 import { logger } from "../services/logger";
-import {
-  buildOperationsSummary,
-  buildReceiptPreviewText,
-  createOperationWithSnapshots,
-  getLatestOperationForUser,
-  getOperationByIdForUser,
-  listRecentOperations,
-  renderAndSendOperation,
-  sendExistingReceipt
-} from "../services/operationService";
+import { buildOperationsSummary, buildReceiptPreviewText, createOperationWithSnapshots, deleteOperationForUser, getLatestOperationForUser, getOperationByIdForUser, listRecentOperations, renderAndSendOperation, sendExistingReceipt } from "../services/operationService";
 import { buildExportFile, getOperationsForExport } from "../services/exportService";
-import {
-  getActiveService,
-  getProfileByUserId,
-  listActiveServices,
-  softDeleteService,
-  upsertTelegramUser
-} from "../services/userService";
+import { getActiveService, getProfileByUserId, listActiveServices, softDeleteService, upsertTelegramUser } from "../services/userService";
 import type { BotContext } from "../types";
 import { clearReceiptDraft } from "../utils/state";
 import { sendMenu } from "../utils/telegram";
 
-const ensureUserAndProfile = async (ctx: BotContext) => {
-  const user = await upsertTelegramUser(ctx.from!);
-  const profile = await getProfileByUserId(user.id);
-
-  if (!profile) {
-    await startRegistration(ctx);
-    return null;
-  }
-
-  return { user, profile };
-};
-
-const showServicesMenu = async (ctx: BotContext, userId: number): Promise<void> => {
-  const services = await listActiveServices(userId);
-  const lines = services.length > 0 ? services.map((service, index) => `${index + 1}. ${service.title}`) : ["Список услуг пока пуст."];
-
-  await sendMenu(ctx, ["Активные услуги:", "", ...lines].join("\n"), servicesKeyboard());
-};
-
-const showProfile = async (ctx: BotContext, userId: number): Promise<void> => {
-  const profile = await getProfileByUserId(userId);
-
-  if (!profile) {
-    await startRegistration(ctx);
-    return;
-  }
-
-  await sendMenu(
-    ctx,
-    [`ИНН: ${profile.inn}`, `ИП: ${profile.ipFullName}`, `Адрес оказания услуги: ${profile.address}`].join("\n"),
-    profileKeyboard()
-  );
-};
-
-const showReceiptServiceSelection = async (ctx: BotContext, userId: number): Promise<void> => {
-  const services = await listActiveServices(userId);
-
-  if (services.length === 0) {
-    await sendMenu(ctx, "Сначала добавьте хотя бы одну услугу.", servicesKeyboard());
-    return;
-  }
-
-  await sendMenu(ctx, "Выберите услугу для квитанции:", serviceSelectionKeyboard(services, "receipt:service"));
-};
-
-const showDeleteServiceSelection = async (ctx: BotContext, userId: number): Promise<void> => {
-  const services = await listActiveServices(userId);
-
-  if (services.length === 0) {
-    await sendMenu(ctx, "Удалять пока нечего. Список услуг пуст.", servicesKeyboard());
-    return;
-  }
-
-  await sendMenu(ctx, "Выберите услугу для удаления:", serviceSelectionKeyboard(services, "service:delete:select"));
-};
-
-const showPreviewIfReady = async (ctx: BotContext, userId: number): Promise<void> => {
-  const draft = ctx.session.receiptDraft;
-
-  if (!draft?.serviceId || !draft.amount || !draft.paymentMethod) {
-    await ctx.reply("Не удалось собрать данные черновика. Начните заново.", {
-      reply_markup: mainMenuKeyboard()
-    });
-    return;
-  }
-
-  const service = await getActiveService(userId, draft.serviceId);
-
-  if (!service) {
-    await ctx.reply("Выбранная услуга больше недоступна. Начните заново.", {
-      reply_markup: mainMenuKeyboard()
-    });
-    return;
-  }
-
-  await sendMenu(
-    ctx,
-    buildReceiptPreviewText(service, {
-      amount: draft.amount,
-      paymentMethod: draft.paymentMethod
-    }),
-    receiptPreviewKeyboard(draft.paymentMethod),
-    { parse_mode: "HTML" }
-  );
-};
-
-const showOperations = async (ctx: BotContext, userId: number): Promise<void> => {
-  const operations = await listRecentOperations(userId);
-  await sendMenu(ctx, buildOperationsSummary(operations, config.timezone), operationsKeyboard(operations));
-};
-
-const sendExport = async (ctx: BotContext, userId: number, rangeKey: ExportRangeKey = "all_time"): Promise<void> => {
-  const operations = await getOperationsForExport(userId, rangeKey, config.timezone);
-  const { fileName, filePath } = await buildExportFile(operations, {
-    userId,
-    rangeKey,
-    exportsDir: config.exportsDir,
-    timeZone: config.timezone
-  });
-
-  logger.info({ userId, rangeKey, operationCount: operations.length }, "Excel export generated");
-  await ctx.replyWithDocument(new InputFile(filePath, fileName), {
-    caption: `Excel-выгрузка готова: ${fileName}`
-  });
-  await ctx.reply("Главное меню", { reply_markup: mainMenuKeyboard() });
-};
-
-const startReceiptFlow = async (ctx: BotContext, userId: number): Promise<void> => {
-  const [lastOperation, services] = await Promise.all([getLatestOperationForUser(userId), listActiveServices(userId)]);
-  const paymentMethod = lastOperation?.paymentMethod ?? "BANK_TRANSFER";
-
-  let service = null;
-
-  if (lastOperation?.serviceId) {
-    service = services.find((item) => item.id === lastOperation.serviceId) ?? null;
-  }
-
-  if (!service && services.length === 1) {
-    service = services[0];
-  }
-
-  ctx.session.receiptDraft = {
-    serviceId: service?.id,
-    paymentMethod,
-    submitted: false
-  };
-  ctx.session.awaitingInput = null;
-
-  if (services.length === 0) {
-    await sendMenu(ctx, "Сначала добавьте хотя бы одну услугу.", servicesKeyboard());
-    return;
-  }
-
-  if (!service) {
-    await showReceiptServiceSelection(ctx, userId);
-    return;
-  }
-
-  ctx.session.awaitingInput = "receipt_amount";
-  await ctx.reply("Введите сумму поступления:");
-};
-
-export const registerCallbackHandlers = (bot: Bot<BotContext>): void => {
-  bot.on("callback_query:data", async (ctx) => {
-    const data = ctx.callbackQuery.data;
-    await ctx.answerCallbackQuery().catch(() => undefined);
-
-    if (data === "menu:main") {
-      clearReceiptDraft(ctx.session);
-      await sendMenu(ctx, "Главное меню", mainMenuKeyboard());
-      return;
-    }
-
-    const ensured = await ensureUserAndProfile(ctx);
-
-    if (!ensured) {
-      return;
-    }
-
-    const { user, profile } = ensured;
-
-    if (data === "menu:profile") {
-      await showProfile(ctx, user.id);
-      return;
-    }
-
-    if (data === "menu:services") {
-      await showServicesMenu(ctx, user.id);
-      return;
-    }
-
-    if (data === "menu:receipt:new") {
-      await startReceiptFlow(ctx, user.id);
-      return;
-    }
-
-    if (data === "menu:operations") {
-      await showOperations(ctx, user.id);
-      return;
-    }
-
-    if (data === "menu:export") {
-      await sendExport(ctx, user.id, "all_time");
-      return;
-    }
-
-    if (data === "profile:edit:inn") {
-      ctx.session.awaitingInput = "profile_edit_inn";
-      await ctx.reply("Введите новый ИНН:");
-      return;
-    }
-
-    if (data === "profile:edit:full_name") {
-      ctx.session.awaitingInput = "profile_edit_full_name";
-      await ctx.reply("Введите новое ФИО ИП:");
-      return;
-    }
-
-    if (data === "profile:edit:address") {
-      ctx.session.awaitingInput = "profile_edit_address";
-      await ctx.reply("Введите новый адрес оказания услуги:");
-      return;
-    }
-
-    if (data === "service:add") {
-      ctx.session.awaitingInput = "service_add";
-      await ctx.reply("Введите название услуги:");
-      return;
-    }
-
-    if (data === "service:delete") {
-      await showDeleteServiceSelection(ctx, user.id);
-      return;
-    }
-
-    if (data.startsWith("service:delete:select:")) {
-      const serviceId = Number(data.split(":").pop());
-      const service = await getActiveService(user.id, serviceId);
-
-      if (!service) {
-        await ctx.reply("Услуга не найдена.");
-        return;
-      }
-
-      await sendMenu(ctx, `Удалить услугу «${service.title}»?`, deleteServiceConfirmKeyboard(service.id));
-      return;
-    }
-
-    if (data.startsWith("service:delete:confirm:")) {
-      const serviceId = Number(data.split(":").pop());
-      await softDeleteService(user.id, serviceId);
-      await showServicesMenu(ctx, user.id);
-      return;
-    }
-
-    if (data.startsWith("receipt:service:")) {
-      const serviceId = Number(data.split(":").pop());
-      const service = await getActiveService(user.id, serviceId);
-
-      if (!service) {
-        await ctx.reply("Услуга не найдена или уже удалена.");
-        return;
-      }
-
-      const paymentMethod = ctx.session.receiptDraft?.paymentMethod ?? "BANK_TRANSFER";
-
-      ctx.session.receiptDraft = {
-        ...ctx.session.receiptDraft,
-        serviceId,
-        paymentMethod,
-        submitted: false
-      };
-
-      if (!ctx.session.receiptDraft.amount) {
-        ctx.session.awaitingInput = "receipt_amount";
-        await ctx.reply("Введите сумму поступления:");
-        return;
-      }
-
-      await showPreviewIfReady(ctx, user.id);
-      return;
-    }
-
-    if (data === "receipt:change:service") {
-      await showReceiptServiceSelection(ctx, user.id);
-      return;
-    }
-
-    if (data === "receipt:change:amount") {
-      ctx.session.awaitingInput = "receipt_amount";
-      await ctx.reply("Введите новую сумму:");
-      return;
-    }
-
-    if (data === "receipt:change:payment") {
-      await ctx.reply("Выберите новую форму оплаты:", { reply_markup: paymentMethodKeyboard() });
-      return;
-    }
-
-    if (data.startsWith("receipt:payment:")) {
-      const paymentMethod = data.split(":").pop() as PaymentMethod;
-
-      ctx.session.receiptDraft = {
-        ...ctx.session.receiptDraft,
-        paymentMethod,
-        submitted: false
-      };
-
-      if (!ctx.session.receiptDraft?.amount) {
-        ctx.session.awaitingInput = "receipt_amount";
-        await ctx.reply("Введите сумму поступления:");
-        return;
-      }
-
-      await showPreviewIfReady(ctx, user.id);
-      return;
-    }
-
-    if (data === "receipt:cancel") {
-      clearReceiptDraft(ctx.session);
-      await sendMenu(ctx, "Создание квитанции отменено.", mainMenuKeyboard());
-      return;
-    }
-
-    if (data === "receipt:confirm") {
-      const draft = ctx.session.receiptDraft;
-
-      if (!draft?.serviceId || !draft.amount || !draft.paymentMethod) {
-        await ctx.reply("Черновик квитанции неполный. Начните заново.", { reply_markup: mainMenuKeyboard() });
-        return;
-      }
-
-      if (draft.submitted) {
-        await ctx.reply("Квитанция уже формируется. Подождите немного.");
-        return;
-      }
-
-      const service = await getActiveService(user.id, draft.serviceId);
-
-      if (!service) {
-        await ctx.reply("Выбранная услуга больше недоступна.");
-        return;
-      }
-
-      ctx.session.receiptDraft = {
-        ...draft,
-        submitted: true
-      };
-
-      const operation = await createOperationWithSnapshots(user, profile, service, {
-        amount: draft.amount,
-        paymentMethod: draft.paymentMethod
-      });
-
-      logger.info({ operationId: operation.id, userId: user.id }, "Operation created");
-      const pendingMessage = await ctx.reply(`Квитанция ${operation.receiptNumber} формируется. Подождите несколько секунд.`);
-      await renderAndSendOperation(ctx, user, operation, logger, pendingMessage.message_id);
-      clearReceiptDraft(ctx.session);
-      return;
-    }
-
-    if (data.startsWith("history:resend:")) {
-      const operationId = Number(data.split(":").pop());
-      const operation = await getOperationByIdForUser(user.id, operationId);
-
-      if (!operation) {
-        await ctx.reply("Операция не найдена.");
-        return;
-      }
-
-      await sendExistingReceipt(ctx, operation, logger, config.timezone);
-      return;
-    }
-
-    await ctx.reply("Неизвестное действие.", {
-      reply_markup: new InlineKeyboard().text("Главное меню", "menu:main")
-    });
-  });
-};
+const ensure = async (ctx: BotContext) => { const user = await upsertTelegramUser(ctx.from!); const profile = await getProfileByUserId(user.id); if (!profile) { await startRegistration(ctx); return null; } return { user, profile }; };
+const showServices = async (ctx: BotContext, userId: number) => { const s = await listActiveServices(userId); await sendMenu(ctx, ["Активные услуги:", "", ...(s.length ? s.map((x, i) => `${i + 1}. ${x.title}`) : ["Список услуг пока пуст."])].join("\n"), servicesKeyboard()); };
+const selectService = async (ctx: BotContext, userId: number) => { const s = await listActiveServices(userId); await sendMenu(ctx, s.length ? "Выберите услугу/товар:" : "Сначала добавьте услугу.", s.length ? serviceSelectionKeyboard(s, "receipt:service") : servicesKeyboard()); };
+const preview = async (ctx: BotContext, userId: number) => { const d = ctx.session.receiptDraft; const services = await listActiveServices(userId); if (!d?.items.length || d.items.some(x => !x.price) || !d.paymentMethod) return void await ctx.reply("Заполните цену для позиции."); await sendMenu(ctx, buildReceiptPreviewText(services, d), receiptPreviewKeyboard(d.paymentMethod, d.calculationType ?? "INCOME"), { parse_mode: "HTML" }); };
+const showOps = async (ctx: BotContext, userId: number) => { const ops = await listRecentOperations(userId); await sendMenu(ctx, buildOperationsSummary(ops, config.timezone), operationsKeyboard(ops)); };
+
+export const registerCallbackHandlers = (bot: Bot<BotContext>): void => { bot.on("callback_query:data", async ctx => {
+  const data = ctx.callbackQuery.data; await ctx.answerCallbackQuery().catch(() => undefined);
+  if (data === "menu:main") { clearReceiptDraft(ctx.session); return void await sendMenu(ctx, "Главное меню", mainMenuKeyboard()); }
+  const e = await ensure(ctx); if (!e) return; const { user, profile } = e;
+  if (data === "menu:profile") return void await sendMenu(ctx, [`ИНН: ${profile.inn}`, `ОГРН: ${profile.ogrn ?? "не указан"}`, `ИП: ${profile.ipFullName}`, `Адрес оказания услуги: ${profile.address}`].join("\n"), profileKeyboard());
+  if (data === "menu:services") return void await showServices(ctx, user.id);
+  if (data === "menu:operations") return void await showOps(ctx, user.id);
+  if (data === "menu:export") { const operations = await getOperationsForExport(user.id, "all_time" as ExportRangeKey, config.timezone); const f = await buildExportFile(operations, { userId: user.id, rangeKey: "all_time", exportsDir: config.exportsDir, timeZone: config.timezone }); await ctx.replyWithDocument(f.filePath); return; }
+  if (data === "menu:receipt:new") { const last = await getLatestOperationForUser(user.id); ctx.session.receiptDraft = { items: [], paymentMethod: last?.paymentMethod ?? "BANK_TRANSFER", calculationType: "INCOME", submitted: false }; return void await selectService(ctx, user.id); }
+  if (data.startsWith("profile:edit:")) { const field = data.split(":").pop(); const map: Record<string, [any, string]> = { inn: ["profile_edit_inn", "Введите новый ИНН:"], full_name: ["profile_edit_full_name", "Введите новое ФИО ИП:"], address: ["profile_edit_address", "Введите новый адрес оказания услуги:"], ogrn: ["profile_edit_ogrn", "Введите ОГРН или отправьте «-», чтобы очистить:"] }; const v = map[field ?? ""]; if (v) { ctx.session.awaitingInput = v[0]; return void await ctx.reply(v[1]); } }
+  if (data === "service:add") { ctx.session.awaitingInput = "service_add"; return void await ctx.reply("Введите название услуги:"); }
+  if (data === "service:delete") { const s = await listActiveServices(user.id); return void await sendMenu(ctx, "Выберите услугу для удаления:", serviceSelectionKeyboard(s, "service:delete:select")); }
+  if (data.startsWith("service:delete:select:")) { const s = await getActiveService(user.id, Number(data.split(":").pop())); return void await sendMenu(ctx, s ? `Удалить услугу «${s.title}»?` : "Услуга не найдена.", s ? deleteServiceConfirmKeyboard(s.id) : mainMenuKeyboard()); }
+  if (data.startsWith("service:delete:confirm:")) { await softDeleteService(user.id, Number(data.split(":").pop())); return void await showServices(ctx, user.id); }
+  if (data === "receipt:add:item") return void await selectService(ctx, user.id);
+  if (data.startsWith("receipt:service:")) { const id = Number(data.split(":").pop()); if (!await getActiveService(user.id, id)) return void await ctx.reply("Услуга не найдена."); const d = ctx.session.receiptDraft; if (!d) return; d.items.push({ serviceId: id, quantity: "1" }); d.editingItemIndex = d.items.length - 1; ctx.session.awaitingInput = "receipt_price"; return void await ctx.reply("Введите цену за единицу:"); }
+  if (data === "receipt:change:price" || data === "receipt:change:quantity") { const d = ctx.session.receiptDraft; if (!d?.items.length) return void await selectService(ctx, user.id); d.editingItemIndex = d.items.length - 1; ctx.session.awaitingInput = data.endsWith("price") ? "receipt_price" : "receipt_quantity"; return void await ctx.reply(data.endsWith("price") ? "Введите новую цену за единицу:" : "Введите количество:"); }
+  if (data === "receipt:toggle:calculation") { const d = ctx.session.receiptDraft; if (!d) return; d.calculationType = d.calculationType === "INCOME" ? "INCOME_RETURN" : "INCOME"; return void await preview(ctx, user.id); }
+  if (data.startsWith("receipt:payment:")) { const d = ctx.session.receiptDraft; if (!d) return; d.paymentMethod = data.split(":").pop() as PaymentMethod; return void await preview(ctx, user.id); }
+  if (data === "receipt:change:payment") return void await ctx.reply("Выберите форму оплаты:", { reply_markup: paymentMethodKeyboard() });
+  if (data === "receipt:cancel") { clearReceiptDraft(ctx.session); return void await sendMenu(ctx, "Создание квитанции отменено.", mainMenuKeyboard()); }
+  if (data === "receipt:confirm") { const d = ctx.session.receiptDraft; if (!d?.items.length || d.items.some(x => !x.price) || !d.paymentMethod || d.submitted) return void await ctx.reply("Черновик квитанции неполный или уже отправлен."); const s = await listActiveServices(user.id); d.submitted = true; const o = await createOperationWithSnapshots(user, profile, s, d); const pending = await ctx.reply(`Квитанция ${o.receiptNumber} формируется.`); await renderAndSendOperation(ctx, user, o, logger, pending.message_id); clearReceiptDraft(ctx.session); return; }
+  if (data.startsWith("history:show:")) { const o = await getOperationByIdForUser(user.id, Number(data.split(":").pop())); return void await (o ? sendExistingReceipt(ctx, o, logger, config.timezone) : ctx.reply("Квитанция не найдена.")); }
+  if (data.startsWith("history:delete:") && !data.includes(":confirm:")) { const o = await getOperationByIdForUser(user.id, Number(data.split(":").pop())); return void await sendMenu(ctx, o ? `Удалить квитанцию №${o.receiptNumber} на сумму ${o.amount} руб?` : "Квитанция не найдена.", o ? deleteOperationConfirmKeyboard(o.id) : mainMenuKeyboard()); }
+  if (data.startsWith("history:delete:confirm:")) { await deleteOperationForUser(user.id, Number(data.split(":").pop())); return void await showOps(ctx, user.id); }
+  await ctx.reply("Неизвестное действие.", { reply_markup: new InlineKeyboard().text("Главное меню", "menu:main") });
+}); };

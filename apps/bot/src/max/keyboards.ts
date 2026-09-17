@@ -1,4 +1,4 @@
-import type { Operation, PaymentMethod, Service } from "@receipt-bot/db";
+import type { Operation, PaymentMethod, ReceiptCalculationType, Service } from "@receipt-bot/db";
 import type { MaxKeyboard } from "./types";
 
 export const mainMenuKeyboard = (): MaxKeyboard => [
@@ -17,6 +17,7 @@ export const profileKeyboard = (): MaxKeyboard => [
   [{ text: "✏️ Изменить ИНН", payload: "profile:edit:inn" }],
   [{ text: "✏️ Изменить ФИО ИП", payload: "profile:edit:full_name" }],
   [{ text: "✏️ Изменить адрес", payload: "profile:edit:address" }],
+  [{ text: "✏️ Изменить ОГРН", payload: "profile:edit:ogrn" }],
   [{ text: "⬅️ Назад", payload: "menu:main" }]
 ];
 
@@ -47,16 +48,17 @@ export const paymentMethodKeyboard = (): MaxKeyboard => [
   [{ text: "❌ Отмена", payload: "receipt:cancel" }]
 ];
 
-export const receiptPreviewKeyboard = (currentPaymentMethod: PaymentMethod): MaxKeyboard => {
+export const receiptPreviewKeyboard = (currentPaymentMethod: PaymentMethod, calculationType: ReceiptCalculationType): MaxKeyboard => {
   const nextPaymentMethod = currentPaymentMethod === "CASH" ? "BANK_TRANSFER" : "CASH";
   const toggleLabel = currentPaymentMethod === "CASH" ? "🏦 Безнал" : "💵 Нал";
 
   return [
     [{ text: "✅ Сгенерировать квитанцию", payload: "receipt:confirm" }],
     [
-      { text: "🧾 Услуга", payload: "receipt:change:service" },
-      { text: "💰 Сумма", payload: "receipt:change:amount" }
+      { text: "➕ Добавить услугу", payload: "receipt:add:item" },
+      { text: "💰 Цена", payload: "receipt:change:price" }
     ],
+    [{ text: "🔢 Количество", payload: "receipt:change:quantity" }, { text: `Признак: ${calculationType === "INCOME" ? "Приход" : "Возврат прихода"}`, payload: "receipt:toggle:calculation" }],
     [
       { text: toggleLabel, payload: `receipt:payment:${nextPaymentMethod}` },
       { text: "❌ Отмена", payload: "receipt:cancel" }
@@ -66,9 +68,9 @@ export const receiptPreviewKeyboard = (currentPaymentMethod: PaymentMethod): Max
 
 export const operationsKeyboard = (operations: Operation[]): MaxKeyboard => {
   const rows: MaxKeyboard = operations
-    .filter((operation) => Boolean(operation.imagePath))
-    .map((operation) => [{ text: `📤 ${operation.receiptNumber}`, payload: `history:resend:${operation.id}` }]);
+    .flatMap((operation) => [[{ text: `👁 Показать ${operation.receiptNumber}`, payload: `history:show:${operation.id}` }], [{ text: "🗑 Удалить", payload: `history:delete:${operation.id}` }]]);
 
-  rows.push([{ text: "⬅️ Назад", payload: "menu:main" }]);
+  rows.push([{ text: "⬅️ Вернуться в меню", payload: "menu:main" }]);
   return rows;
 };
+export const deleteOperationConfirmKeyboard = (id: number): MaxKeyboard => [[{ text: "🗑 Удалить", payload: `history:delete:confirm:${id}` }], [{ text: "❌ Отмена", payload: "menu:operations" }]];

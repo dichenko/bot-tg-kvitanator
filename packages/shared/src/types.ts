@@ -1,4 +1,5 @@
 export type PaymentMethodValue = "CASH" | "BANK_TRANSFER";
+export type ReceiptCalculationTypeValue = "INCOME" | "INCOME_RETURN";
 
 export type OperationStatusValue =
   | "DRAFT"
@@ -18,7 +19,9 @@ export interface RenderReceiptRequest {
   inn: string;
   ipFullName: string;
   address: string;
-  serviceTitle: string;
+  ogrn?: string | null;
+  calculationType: ReceiptCalculationTypeValue;
+  items: Array<{ title: string; quantity: string; price: string; amount: string }>;
   amount: string;
   paymentMethod: PaymentMethodValue;
 }

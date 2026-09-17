@@ -3,6 +3,11 @@ export const PAYMENT_METHOD_LABELS = {
   BANK_TRANSFER: "Безналичные"
 } as const;
 
+export const CALCULATION_TYPE_LABELS = {
+  INCOME: "Приход",
+  INCOME_RETURN: "Возврат прихода"
+} as const;
+
 export const OPERATION_STATUS_LABELS = {
   DRAFT: "Черновик",
   CONFIRMED: "Подтверждена",

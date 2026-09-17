@@ -387,10 +387,9 @@
               <div class="logo-icon">KB</div>
               <div class="logo-text">
                 <div class="logo-text-main">Квитанатор</div>
-                <div class="logo-text-sub">Внутренние квитанции для ИП</div>
+                <div class="logo-text-sub">Сервис генерации квитанций</div>
               </div>
             </div>
-            <div class="status-badge">Оплата получена</div>
           </div>
 
           <div class="header-meta">
@@ -412,6 +411,8 @@
             <div class="field-label">Индивидуальный предприниматель</div>
             <div class="field-value">{{ipFullName}}</div>
             <div class="field-value field-value-muted mono">ИНН: {{inn}}</div>
+            {{#if ogrn}}<div class="field-value field-value-muted mono">ОГРН: {{ogrn}}</div>{{/if}}
+            <div class="field-value field-value-muted">Патентная система налогообложения</div>
           </div>
 
           <div class="section">
@@ -420,28 +421,25 @@
           </div>
 
           <div class="section">
-            <div class="services-title">Услуги</div>
-
             <div class="services-header-row">
-              <div>Наименование услуги</div>
+              <div>Наименование услуги/товара</div>
               <div class="services-header-right">
                 <span>Кол-во</span>
-                <span>Сумма, ₽</span>
+                <span>Цена, ₽</span>
               </div>
             </div>
 
-            <div class="service-row">
+            {{#each items}}<div class="service-row">
               <div class="service-main">
-                <div class="service-name">{{serviceTitle}}</div>
-                <div class="service-meta">Оказанная услуга</div>
+                <div class="service-name">{{title}}</div>
               </div>
               <div class="service-right">
                 <div class="service-right-content">
-                  <div class="service-qty">1 усл.</div>
-                  <div class="mono">{{amount}}</div>
+                  <div class="service-qty">{{quantity}}</div>
+                  <div class="mono">{{price}}</div>
                 </div>
               </div>
-            </div>
+            </div>{{/each}}
 
             <div class="summary-block">
               <div>
@@ -454,6 +452,8 @@
             <div class="pay-form-block">
               <div class="field-label">Форма расчёта</div>
               <div class="field-value">{{paymentMethodLabel}}</div>
+              <div class="field-label" style="margin-top: 8px">Признак расчёта</div>
+              <div class="field-value">{{calculationTypeLabel}}</div>
             </div>
           </div>
 
