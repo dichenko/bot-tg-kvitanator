@@ -18,7 +18,9 @@ const envSchema = z.object({
   RENDERER_URL: z.string().url(),
   RECEIPTS_DIR: z.string().min(1),
   EXPORTS_DIR: z.string().min(1),
-  APP_TIMEZONE: z.string().default("Europe/Moscow")
+  APP_TIMEZONE: z.string().default("Europe/Moscow"),
+  DAILY_STATS_TELEGRAM_ID: z.coerce.number().int().positive().default(19422781),
+  DAILY_STATS_HOUR: z.coerce.number().int().min(0).max(23).default(7)
 }).superRefine((value, ctx) => {
   if (!value.ENABLE_MAX) {
     return;
@@ -74,5 +76,7 @@ export const config = {
   rendererUrl: parsed.RENDERER_URL,
   receiptsDir: parsed.RECEIPTS_DIR,
   exportsDir: parsed.EXPORTS_DIR,
-  timezone: parsed.APP_TIMEZONE
+  timezone: parsed.APP_TIMEZONE,
+  dailyStatsTelegramId: parsed.DAILY_STATS_TELEGRAM_ID,
+  dailyStatsHour: parsed.DAILY_STATS_HOUR
 };

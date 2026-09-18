@@ -3,6 +3,7 @@ import { Bot, webhookCallback } from "grammy";
 import { prisma } from "@receipt-bot/db";
 import { createBot } from "./bot";
 import { config } from "./config";
+import { startDailyStatsScheduler } from "./services/dailyStatsService";
 import { logger } from "./services/logger";
 import type { BotContext } from "./types";
 import { createMaxClient, ensureMaxWebhook, registerMaxWebhook } from "./max/webhook";
@@ -31,6 +32,7 @@ const ensureWebhook = async (bot: Bot<BotContext>): Promise<void> => {
 const start = async (): Promise<void> => {
   const bot = createBot();
   const maxClient = config.maxEnabled ? createMaxClient() : null;
+  startDailyStatsScheduler(bot);
 
   if (config.botMode === "polling") {
     void bot
