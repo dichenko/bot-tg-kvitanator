@@ -6,6 +6,11 @@ export const createInitialSession = (): BotSession => ({
   receiptDraft: null
 });
 
+export const clearBrandingDraft = (session: BotSession): void => {
+  delete session.brandingDraft;
+  if (session.awaitingInput?.startsWith("branding_")) session.awaitingInput = null;
+};
+
 export const clearReceiptDraft = (session: BotSession): void => {
   session.receiptDraft = null;
   if (session.awaitingInput === "receipt_custom_service" || session.awaitingInput === "receipt_price" || session.awaitingInput === "receipt_quantity") {

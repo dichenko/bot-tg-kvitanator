@@ -26,6 +26,9 @@ export interface RenderReceiptRequest {
   items: Array<{ title: string; quantity: string; price: string; amount: string }>;
   amount: string;
   paymentMethod: PaymentMethodValue;
+  branding?: import("./branding").ReceiptBranding | null;
+  /** Preview files have unique names and never overwrite an operation's receipt. */
+  preview?: boolean;
 }
 
 export interface RenderReceiptResponse {

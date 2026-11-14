@@ -1,11 +1,13 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 import Handlebars from "handlebars";
 import { chromium } from "playwright";
 import { DateTime } from "luxon";
 import type { RenderReceiptRequest } from "@receipt-bot/shared";
 import { PAYMENT_METHOD_LABELS } from "@receipt-bot/shared";
 import { CALCULATION_TYPE_LABELS } from "@receipt-bot/shared";
+import { parseReceiptBranding } from "@receipt-bot/shared";
 
 let compiledTemplate: Handlebars.TemplateDelegate | null = null;
 
@@ -38,15 +40,28 @@ const getTemplate = async (): Promise<Handlebars.TemplateDelegate> => {
   return compiledTemplate;
 };
 
-export const renderReceiptImage = async (
+export const buildReceiptHtml = async (
   payload: RenderReceiptRequest,
   options: { receiptsDir: string; timeZone: string }
 ): Promise<string> => {
-  await fs.mkdir(options.receiptsDir, { recursive: true });
-
+  const branding = parseReceiptBranding(payload.branding);
+  if (payload.branding && !branding) throw new Error("Invalid receipt branding");
+  let logoDataUrl: string | undefined;
+  if (branding?.logoFileName) {
+    const logoPath = path.join(options.receiptsDir, "branding", branding.logoFileName);
+    const info = await fs.stat(logoPath);
+    if (!info.isFile() || info.size > 256 * 1024) throw new Error("Invalid normalized logo");
+    const image = await fs.readFile(logoPath);
+    if (image.length < 24 || !image.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+      || image.readUInt32BE(16) > 320 || image.readUInt32BE(20) > 128) throw new Error("Invalid normalized logo");
+    logoDataUrl = `data:image/png;base64,${image.toString("base64")}`;
+  }
   const template = await getTemplate();
-  const html = template({
+  return template({
     title: "КВИТАНЦИЯ",
+    branding,
+    logoDataUrl,
+    preview: payload.preview,
     receiptNumber: payload.receiptNumber,
     createdAt: DateTime.fromISO(payload.createdAt, { zone: "utc" }).setZone(payload.timeZone ?? options.timeZone).toFormat("dd.LL.yyyy HH:mm"),
     inn: payload.inn,
@@ -61,6 +76,14 @@ export const renderReceiptImage = async (
     paymentMethodLabel: PAYMENT_METHOD_LABELS[payload.paymentMethod],
     calculationTypeLabel: CALCULATION_TYPE_LABELS[payload.calculationType]
   });
+};
+
+export const renderReceiptImage = async (
+  payload: RenderReceiptRequest,
+  options: { receiptsDir: string; timeZone: string }
+): Promise<string> => {
+  await fs.mkdir(options.receiptsDir, { recursive: true });
+  const html = await buildReceiptHtml(payload, options);
 
   const browser = await chromium.launch({ headless: true });
 
@@ -77,8 +100,11 @@ export const renderReceiptImage = async (
 
     await page.emulateMedia({ media: "screen" });
     await page.setContent(html, { waitUntil: "networkidle" });
+    await page.locator("img").evaluateAll(async images => {
+      await Promise.all(images.map(image => (image as unknown as { decode(): Promise<void> }).decode()));
+    });
 
-    const imagePath = path.join(options.receiptsDir, `receipt-${payload.operationId}.jpg`);
+    const imagePath = path.join(options.receiptsDir, payload.preview ? `preview-${randomUUID()}.jpg` : `receipt-${payload.operationId}.jpg`);
     const receiptCard = page.locator(".receipt-wrapper");
 
     await receiptCard.screenshot({

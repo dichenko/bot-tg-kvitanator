@@ -209,6 +209,11 @@ isolated tests): [docs/interactive-statistics.md](docs/interactive-statistics.md
 6. Open operations history and resend the receipt.
 7. Export operations to Excel for different periods.
 
+## Receipt branding pilot
+
+Telegram-only receipt branding pilot (restricted to `DAILY_STATS_TELEGRAM_ID`):
+[setup, image requirements and tests](docs/receipt-branding-pilot.md).
+
 ## Receipt numbering
 
 MVP uses an operation-id-based receipt number in the format `KV-000001`. This avoids duplicate numbers per user without introducing a separate sequence table.

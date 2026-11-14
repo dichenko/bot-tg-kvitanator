@@ -14,8 +14,8 @@ export const mainMenuKeyboard = (): InlineKeyboard =>
 
 export const backToMainKeyboard = (): InlineKeyboard => new InlineKeyboard().text("⬅️ Назад", "menu:main");
 
-export const profileKeyboard = (): InlineKeyboard =>
-  new InlineKeyboard()
+export const profileKeyboard = (enableBranding = false): InlineKeyboard => {
+  const keyboard = new InlineKeyboard()
     .text("✏️ Изменить ИНН", "profile:edit:inn")
     .row()
     .text("✏️ Изменить ФИО ИП", "profile:edit:full_name")
@@ -25,8 +25,10 @@ export const profileKeyboard = (): InlineKeyboard =>
     .text("✏️ Изменить ОГРН", "profile:edit:ogrn")
     .row()
     .text("🕒 Изменить часовой пояс", "profile:tz")
-    .row()
-    .text("⬅️ Назад", "menu:main");
+    .row();
+  if (enableBranding) keyboard.text("🎨 Оформление квитанции · тест", "branding:open").row();
+  return keyboard.text("⬅️ Назад", "menu:main");
+};
 
 /** Registration screen: default МСК first, the other zones below. */
 export const registrationTimeZoneKeyboard = (): InlineKeyboard => {

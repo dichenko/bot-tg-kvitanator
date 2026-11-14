@@ -6,6 +6,7 @@
   "scripts": {
     "build": "pnpm -r build",
     "test:stats": "node scripts/test-statistics.cjs",
+    "test:branding": "node scripts/test-branding.cjs",
     "import:legacy-receipts": "node scripts/import-legacy-receipts.cjs",
     "resequence:receipts": "node scripts/resequence-receipts.cjs",
     "postinstall": "pnpm prisma:generate",

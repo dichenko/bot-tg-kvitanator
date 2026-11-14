@@ -1,9 +1,13 @@
 import type { SessionFlavor } from "grammy";
 import type { Context } from "grammy";
 import type { PaymentMethod, ReceiptCalculationType } from "@receipt-bot/db";
+import type { ReceiptBranding } from "@receipt-bot/shared";
 
 export type AwaitingInput =
   | null
+  | "branding_logo"
+  | "branding_name"
+  | "branding_subtitle"
   | "registration_inn"
   | "registration_full_name"
   | "registration_address"
@@ -38,6 +42,7 @@ export interface BotSession {
   awaitingInput: AwaitingInput;
   registrationDraft: RegistrationDraft;
   receiptDraft: ReceiptDraft | null;
+  brandingDraft?: ReceiptBranding | null;
 }
 
 export type BotContext = Context & SessionFlavor<BotSession>;

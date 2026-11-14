@@ -21,6 +21,7 @@ const envSchema = z.object({
   EXPORTS_DIR: z.string().min(1),
   APP_TIMEZONE: z.string().refine(value => IANAZone.isValidZone(value), "Invalid IANA timezone").default("Europe/Moscow"),
   DAILY_STATS_TELEGRAM_ID: z.coerce.number().int().positive().default(19422781),
+  RECEIPT_BRANDING_TEST_ENABLED: z.enum(["true", "false"]).default("true").transform(value => value === "true"),
   DAILY_STATS_HOUR: z.coerce.number().int().min(0).max(23).default(7)
 }).superRefine((value, ctx) => {
   if (!value.ENABLE_MAX) {
@@ -79,5 +80,6 @@ export const config = {
   exportsDir: parsed.EXPORTS_DIR,
   timezone: parsed.APP_TIMEZONE,
   dailyStatsTelegramId: parsed.DAILY_STATS_TELEGRAM_ID,
+  receiptBrandingTestEnabled: parsed.RECEIPT_BRANDING_TEST_ENABLED,
   dailyStatsHour: parsed.DAILY_STATS_HOUR
 };

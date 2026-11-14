@@ -3,7 +3,7 @@ import { mainMenuKeyboard } from "../keyboards";
 import { logger } from "../services/logger";
 import { getProfileByUserId, upsertTelegramUser } from "../services/userService";
 import type { BotContext } from "../types";
-import { clearRegistrationDraft, clearReceiptDraft } from "../utils/state";
+import { clearRegistrationDraft, clearReceiptDraft, clearBrandingDraft } from "../utils/state";
 import { sendMenu } from "../utils/telegram";
 
 const registrationIntroText = [
@@ -22,6 +22,7 @@ const startRegistration = async (ctx: BotContext): Promise<void> => {
 };
 
 const goToMainFlow = async (ctx: BotContext): Promise<void> => {
+  clearBrandingDraft(ctx.session);
   const user = await upsertTelegramUser(ctx.from!);
   const profile = await getProfileByUserId(user.id);
 

@@ -13,13 +13,14 @@ import type { BotContext } from "../types";
 import { buildServicesListText } from "../utils/formatters";
 import { clearReceiptDraft } from "../utils/state";
 import { sendMenu } from "../utils/telegram";
+import { canConfigureBranding } from "../services/brandingService";
 
 const ensure = async (ctx: BotContext) => { const user = await upsertTelegramUser(ctx.from!); const profile = await getProfileByUserId(user.id); if (!profile) { await startRegistration(ctx); return null; } return { user, profile }; };
 const showServices = async (ctx: BotContext, userId: number) => { const s = await listActiveServices(userId); await sendMenu(ctx, buildServicesListText(s), servicesKeyboard()); };
 const selectService = async (ctx: BotContext, userId: number) => { const s = await listActiveServices(userId); await sendMenu(ctx, "Выберите услугу/товар:", serviceSelectionKeyboard(s, "receipt:service", true, true)); };
 const preview = async (ctx: BotContext, userId: number) => { const d = ctx.session.receiptDraft; const services = await listActiveServices(userId); if (!d?.items.length || d.items.some(x => !x.price) || !d.paymentMethod) return void await ctx.reply("Заполните цену для позиции."); await sendMenu(ctx, buildReceiptPreviewText(services, d), receiptPreviewKeyboard(d.paymentMethod, d.calculationType ?? "INCOME"), { parse_mode: "HTML" }); };
 const showOps = async (ctx: BotContext, userId: number) => { const ops = await listRecentOperations(userId); await sendMenu(ctx, buildOperationsSummary(ops), operationsKeyboard(ops)); };
-const showProfile = async (ctx: BotContext, profile: EntrepreneurProfile) => sendMenu(ctx, [`ИНН: ${profile.inn}`, `ОГРН: ${profile.ogrn ?? "не указан"}`, `ИП: ${profile.ipFullName}`, `Адрес оказания услуги: ${profile.address}`, ...buildProfileTimeZoneLines(profile.timeZone)].join("\n"), profileKeyboard());
+const showProfile = async (ctx: BotContext, profile: EntrepreneurProfile) => sendMenu(ctx, [`ИНН: ${profile.inn}`, `ОГРН: ${profile.ogrn ?? "не указан"}`, `ИП: ${profile.ipFullName}`, `Адрес оказания услуги: ${profile.address}`, ...buildProfileTimeZoneLines(profile.timeZone)].join("\n"), profileKeyboard(canConfigureBranding(ctx)));
 
 export const registerCallbackHandlers = (bot: Bot<BotContext>): void => { bot.on("callback_query:data", async ctx => {
   const data = ctx.callbackQuery.data; await ctx.answerCallbackQuery().catch(() => undefined);

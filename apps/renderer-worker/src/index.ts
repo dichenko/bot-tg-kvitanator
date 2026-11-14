@@ -1,25 +1,9 @@
 import express from "express";
 import type { RenderReceiptRequest } from "@receipt-bot/shared";
-import { z } from "zod";
-import { IANAZone } from "luxon";
+import { payloadSchema } from "./receiptPayload";
 import { config } from "./config";
 import { logger } from "./logger";
 import { renderReceiptImage } from "./renderReceipt";
-
-const payloadSchema = z.object({
-  operationId: z.number().int().positive(),
-  receiptNumber: z.string().min(1),
-  createdAt: z.string().datetime(),
-  timeZone: z.string().refine((value) => IANAZone.isValidZone(value), "Invalid IANA timezone").optional(),
-  inn: z.string().min(1),
-  ogrn: z.string().nullable().optional(),
-  ipFullName: z.string().min(1),
-  address: z.string().min(1),
-  calculationType: z.enum(["INCOME", "INCOME_RETURN"]),
-  items: z.array(z.object({ title: z.string().min(1), quantity: z.string().min(1), price: z.string().min(1), amount: z.string().min(1) })).min(1),
-  amount: z.string().min(1),
-  paymentMethod: z.enum(["CASH", "BANK_TRANSFER"])
-});
 
 const app = express();
 app.use(express.json({ limit: "1mb" }));
