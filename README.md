@@ -209,10 +209,10 @@ isolated tests): [docs/interactive-statistics.md](docs/interactive-statistics.md
 6. Open operations history and resend the receipt.
 7. Export operations to Excel for different periods.
 
-## Subscription and receipt branding pilot
+## Subscription and receipt branding
 
-Telegram-only test mode for one user (`DAILY_STATS_TELEGRAM_ID`): the main menu gets "Моя подписка"
-with simulated purchase; receipt branding is a paid feature there:
+Available to all Telegram (private chat) and MAX users: the main menu has "Моя подписка"; payment is not
+connected yet, so buying grants 365 days as a gift; receipt branding is a paid feature there:
 [setup, rules and tests](docs/subscription-pilot.md), [branding details](docs/receipt-branding-pilot.md).
 
 ## Receipt numbering

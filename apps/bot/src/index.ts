@@ -37,7 +37,7 @@ const start = async (): Promise<void> => {
   const bot = createBot();
   const maxClient = config.maxEnabled ? createMaxClient() : null;
   startDailyStatsScheduler(bot);
-  startSubscriptionReminderScheduler(bot);
+  startSubscriptionReminderScheduler(bot, maxClient);
 
   if (config.botMode === "polling") {
     void bot

@@ -8,7 +8,7 @@ import { buildSubscriptionText, canRenewSubscription, canUseSubscription, format
 import { logger } from "../services/logger";
 import { sendMenu } from "../utils/telegram";
 
-// TEST MODE: Telegram only, one pilot user. Purchase is simulated (see subscriptionService).
+// Telegram only. Purchase is a free gift for the first users until payments are connected (see subscriptionService).
 const show = async (ctx: BotContext, user: User, timeZone: string, message?: string): Promise<void> => {
   const active = hasActiveSubscription(user.subscriptionUntil);
   await sendMenu(ctx, [message, buildSubscriptionText(user, timeZone)].filter(Boolean).join("\n\n"),

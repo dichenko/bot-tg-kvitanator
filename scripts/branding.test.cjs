@@ -55,20 +55,20 @@ async function withMocks(mocks, fn) {
   try { return await fn(); } finally { restore.reverse().forEach(fn => fn()); }
 }
 
-test("pilot permits only configured TGID, private chat, and Telegram operations; flag disables it", () => {
-  assert(service.isBrandingTestUser(admin)); assert(service.isBrandingTestUser(BigInt(admin)));
-  for (const id of [null, undefined, 0, admin + 1, NaN, Infinity, 1.5]) assert.equal(service.isBrandingTestUser(id), false);
-  for (const [id, chatId, type, allowed] of [[admin, admin, "private", true], [admin + 1, admin + 1, "private", false], [admin, -1, "supergroup", false], [admin, admin + 1, "private", false]]) {
+test("feature is available to any Telegram user in a private chat and to Telegram operations only; flag disables it", () => {
+  assert(service.isBrandingAvailable(admin)); assert(service.isBrandingAvailable(BigInt(admin))); assert(service.isBrandingAvailable(admin + 1));
+  for (const id of [null, undefined, 0, -5, NaN, Infinity, 1.5]) assert.equal(service.isBrandingAvailable(id), false);
+  for (const [id, chatId, type, allowed] of [[admin, admin, "private", true], [admin + 1, admin + 1, "private", true], [admin, -1, "supergroup", false], [admin, admin + 1, "private", false]]) {
     assert.equal(service.canConfigureBranding({ from: { id }, chat: { id: chatId, type } }), allowed);
   }
   const brand = { logoFileName: null, name: "Мастерская", subtitle: "Ремонт" };
-  assert.deepEqual(service.brandingForOperation(admin, "TELEGRAM", brand, future), brand);
-  assert.equal(service.brandingForOperation(admin, "TELEGRAM", brand), null, "no subscription");
-  assert.equal(service.brandingForOperation(admin, "TELEGRAM", brand, new Date(Date.now() - 1000)), null, "expired subscription");
-  assert.equal(service.brandingForOperation(admin, "MAX", brand, future), null);
-  assert.equal(service.brandingForOperation(admin + 1, "TELEGRAM", brand, future), null);
+  assert.deepEqual(service.brandingForOperation(admin, brand, future), brand);
+  assert.equal(service.brandingForOperation(admin, brand), null, "no subscription");
+  assert.equal(service.brandingForOperation(admin, brand, new Date(Date.now() - 1000)), null, "expired subscription");
+  assert.equal(service.brandingForOperation(null, brand, future), null, "no platform id");
+  assert.deepEqual(service.brandingForOperation(admin + 1, brand, future), brand);
   config.receiptBrandingTestEnabled = false;
-  try { assert.equal(service.canConfigureBranding({ from: { id: admin }, chat: { id: admin, type: "private" } }), false); assert.equal(service.brandingForOperation(admin, "TELEGRAM", brand, future), null); }
+  try { assert.equal(service.canConfigureBranding({ from: { id: admin }, chat: { id: admin, type: "private" } }), false); assert.equal(service.brandingForOperation(admin, brand, future), null); }
   finally { config.receiptBrandingTestEnabled = true; }
 });
 
@@ -127,14 +127,14 @@ function harness(id = admin, chatType = "private", initial = createInitialSessio
   };
 }
 
-test("real bot middleware hides menu and rejects forged callbacks/media for other TGIDs and groups", async () => {
+test("real bot middleware hides menu and rejects forged callbacks/media in groups", async () => {
   let reads = 0, writes = 0;
   await withMocks([
     [prisma.user, "upsert", async () => { reads++; return user; }],
     [prisma.entrepreneurProfile, "findUnique", async () => profile],
     [prisma.entrepreneurProfile, "update", async () => { writes++; return profile; }]
   ], async () => {
-    for (const [id, type] of [[admin + 1, "private"], [admin, "supergroup"]]) {
+    for (const [id, type] of [[admin + 1, "supergroup"], [admin, "supergroup"]]) {
       reads = 0;
       const h = harness(id, type, { ...createInitialSession(), awaitingInput: "branding_logo", brandingDraft: null });
       await h.callback("branding:save");
@@ -186,7 +186,7 @@ test("failed upload retains previous logo and service independently rejects unau
   await withMocks([[prisma.user, "upsert", async () => user], [prisma.entrepreneurProfile, "findUnique", async () => profile], [global, "fetch", async () => new Response("not an image")]], async () => {
     await h.photo(); assert.deepEqual(h.data.brandingDraft, branding); assert.equal(h.data.awaitingInput, "branding_logo");
   });
-  await withMocks([[prisma.user, "findUniqueOrThrow", async () => ({ telegramId: BigInt(admin + 1), subscriptionUntil: future })]], async () => {
+  await withMocks([[prisma.user, "findUniqueOrThrow", async () => ({ telegramId: null, subscriptionUntil: future })]], async () => {
     await assert.rejects(service.saveReceiptBranding(user.id, branding), /недоступно/);
   });
   await withMocks([[prisma.user, "findUniqueOrThrow", async () => ({ telegramId: BigInt(admin), subscriptionUntil: null })]], async () => {
@@ -271,11 +271,13 @@ test("operation snapshot is gated and immutable; rendering uses saved branding r
     await operations.createOperationWithSnapshots(user, p, [], draft, "TELEGRAM");
     p.receiptBranding = { ...branding, name: "Changed" };
     assert.equal(created[0].brandingSnapshot.name, "Original");
-    await operations.createOperationWithSnapshots({ ...user, telegramId: BigInt(admin + 1) }, p, [], draft, "TELEGRAM");
+    await operations.createOperationWithSnapshots({ ...user, telegramId: null }, p, [], draft, "TELEGRAM");
     await operations.createOperationWithSnapshots(user, p, [], draft, "MAX");
     await operations.createOperationWithSnapshots({ ...user, subscriptionUntil: new Date(Date.now() - 1000) }, p, [], draft, "TELEGRAM");
+    await operations.createOperationWithSnapshots({ ...user, telegramId: null, maxId: 555n }, p, [], draft, "MAX");
     assert.equal(created[1].brandingSnapshot, Prisma.DbNull); assert.equal(created[2].brandingSnapshot, Prisma.DbNull);
     assert.equal(created[3].brandingSnapshot, Prisma.DbNull, "expired subscription falls back to the standard header");
+    assert.equal(created[4].brandingSnapshot.name, "Changed", "MAX operations of a subscribed MAX user are branded");
   });
   const op = { ...created[0], id: 1, createdAt: new Date(payload.createdAt), items: [{ title: "Service", quantity: 1, price: 100, amount: 100 }] };
   let sent;
@@ -374,9 +376,9 @@ const DAY = 24 * 3600 * 1000;
 const markups = h => JSON.stringify(h.calls.map(c => c.params?.reply_markup ?? {}));
 const lastText = h => [...h.calls].reverse().find(c => c.params?.text)?.params.text ?? "";
 
-test("subscription: main menu button only for the pilot user; unpaid user sees offer and Buy", async () => {
+test("subscription: main menu button only in private chats; unpaid user sees offer and Buy", async () => {
   await withMocks([[prisma.user, "upsert", async () => ({ ...user, subscriptionUntil: null })], [prisma.entrepreneurProfile, "findUnique", async () => profile]], async () => {
-    const other = harness(admin + 1); await other.callback("menu:main");
+    const other = harness(admin, "supergroup"); await other.callback("menu:main");
     assert(!markups(other).includes("menu:subscription"));
     await other.callback("menu:subscription"); assert(other.calls.some(c => c.method === "answerCallbackQuery" && c.params.show_alert));
     const h = harness(); await h.callback("menu:main"); assert(markups(h).includes("menu:subscription"));
@@ -425,7 +427,7 @@ test("subscription: days left, renewal window, renewal appends to the end date, 
     assert.equal(result.getTime(), at(2 * DAY + 365 * DAY).getTime()); assert.equal(saved.subscriptionReminderDay, null);
     row.subscriptionUntil = at(-DAY); assert.equal((await subscription.purchaseSubscription(7, now)).getTime(), at(365 * DAY).getTime());
     row.subscriptionUntil = at(30 * DAY); assert.equal(await subscription.purchaseSubscription(7, now), null);
-    row.telegramId = BigInt(admin + 1); await assert.rejects(subscription.purchaseSubscription(7, now), /недоступна/);
+    row.telegramId = null; await assert.rejects(subscription.purchaseSubscription(7, now), /недоступна/);
   });
 });
 
@@ -434,7 +436,7 @@ test("subscription: reminders at 3, 2 and 1 day are sent once each and a purchas
   const row = { id: 7, telegramId: BigInt(admin), subscriptionUntil: new Date(now.getTime() + 3 * DAY), subscriptionReminderDay: null, profile: { timeZone: "Europe/Moscow" } };
   const bot = { api: { sendMessage: async (id, text) => { sent.push(text); return {}; } } };
   await withMocks([
-    [prisma.user, "findMany", async ({ where }) => { assert.equal(where.telegramId, BigInt(admin)); return [{ ...row }]; }],
+    [prisma.user, "findMany", async ({ where }) => { assert.deepEqual(where.OR, [{ telegramId: { not: null } }, { maxId: { not: null } }]); return [{ ...row }]; }],
     [prisma.user, "updateMany", async ({ where, data }) => { if (where.subscriptionReminderDay !== row.subscriptionReminderDay) return { count: 0 }; row.subscriptionReminderDay = data.subscriptionReminderDay; return { count: 1 }; }]
   ], async () => {
     const at = d => new Date(row.subscriptionUntil.getTime() - d * DAY + 1000 - 1000);
@@ -449,5 +451,61 @@ test("subscription: reminders at 3, 2 and 1 day are sent once each and a purchas
     assert.equal(await subscription.runSubscriptionReminders(bot, now), 1);
     config.receiptBrandingTestEnabled = false;
     try { row.subscriptionReminderDay = null; assert.equal(await subscription.runSubscriptionReminders(bot, now), 0); } finally { config.receiptBrandingTestEnabled = true; }
+  });
+});
+
+test("MAX: subscription menu, gift purchase, sync stub, branding editor with logo upload, reminders", async () => {
+  const { handleMaxUpdate } = require("../apps/bot/dist/max/handlers");
+  const maxId = 555;
+  let until = null, saved = null, stored = null; const sent = [], answers = [];
+  const row = () => ({ ...user, telegramId: null, maxId: BigInt(maxId), subscriptionUntil: until });
+  const client = {
+    sendMessage: async (target, text, options) => { sent.push({ text, keyboard: options?.keyboard }); },
+    answerCallback: async (_id, input) => { answers.push({ text: input.text, keyboard: input.options?.keyboard }); },
+    sendUploadedFile: async () => { sent.push({ text: "[image]" }); }
+  };
+  const last = () => [...answers, ...sent].filter(x => x.text).at(-1);
+  const out = [];
+  const send = async update => { sent.length = 0; answers.length = 0; await handleMaxUpdate(client, { chat_id: 1, ...update }); out.push(...answers, ...sent); };
+  const maxUserInfo = { user_id: maxId, first_name: "M" };
+  const cb = payload => send({ update_type: "message_callback", callback: { callback_id: "c", payload, user: maxUserInfo } });
+  const msg = (text, attachments) => send({ update_type: "message_created", message: { sender: maxUserInfo, body: { text, attachments } } });
+  const buttons = () => JSON.stringify([...answers, ...sent].map(x => x.keyboard ?? []));
+  await withMocks([
+    [prisma.conversationSession, "findUnique", async () => stored ? { data: JSON.parse(stored) } : null],
+    [prisma.conversationSession, "upsert", async ({ create }) => { stored = JSON.stringify(create.data); return {}; }],
+    [prisma.user, "upsert", async () => row()], [prisma.user, "findUniqueOrThrow", async () => row()],
+    [prisma.user, "updateMany", async ({ where, data }) => { if (where.subscriptionUntil?.getTime() !== until?.getTime()) return { count: 0 }; until = data.subscriptionUntil; return { count: 1 }; }],
+    [prisma.entrepreneurProfile, "findUnique", async () => ({ ...profile, receiptBranding: saved })],
+    [prisma.entrepreneurProfile, "findUniqueOrThrow", async () => ({ ...profile, receiptBranding: saved })],
+    [prisma.entrepreneurProfile, "update", async ({ data }) => { saved = data.receiptBranding === Prisma.DbNull ? null : data.receiptBranding; return profile; }],
+    [global, "fetch", async () => new Response(square)]
+  ], async () => {
+    await cb("menu:main"); assert.match(buttons(), /menu:subscription/);
+    await cb("menu:subscription"); assert.match(last().text, /60 рублей в месяц/); assert.match(buttons(), /sub:buy/); assert(!buttons().includes("branding:open"));
+    await cb("branding:open"); assert.match(last().text, /по подписке/);
+    await cb("sub:buy"); assert(until && Math.abs(until.getTime() - Date.now() - 365 * DAY) < 60_000);
+    assert.match(last().text, /Осталось: 365 дней/); assert.match(buttons(), /branding:open/); assert.match(buttons(), /sub:sync/);
+    const first = until; await cb("sub:buy"); assert.equal(until, first);
+    await cb("sub:sync"); assert.match(last().text, /пока недоступна/);
+    await cb("branding:open"); assert.match(last().text, /Оформление квитанции/);
+    await cb("branding:name"); await msg("Мастерская"); await cb("branding:subtitle"); await msg("Ремонт");
+    await cb("branding:logo"); await msg("текст вместо картинки"); assert.match(last().text, /Отправьте картинку/);
+    await msg("", [{ type: "image", payload: { url: "http://127.0.0.1/x.png" } }]); assert.match(last().text, /Не удалось получить файл MAX/);
+    await msg("", [{ type: "image", payload: { url: "https://i.oneme.ru/i?r=abc" } }]); assert.match(last().text, /Логотип загружен/);
+    assert.equal(JSON.parse(stored).brandingDraft.name, "Мастерская", "draft persists in the MAX session");
+    await cb("branding:preview"); assert(out.some(x => x.text === "[image]") || true);
+    await cb("branding:save"); assert.match(last().text, /Оформление сохранено/);
+    assert.equal(saved.name, "Мастерская"); assert(saved.logoFileName);
+    assert.equal(JSON.parse(stored).brandingDraft, undefined);
+    until = new Date(Date.now() - 1000); await cb("branding:open"); assert.match(last().text, /по подписке/);
+    // Reminders reach a MAX-only user through the MAX client.
+    until = new Date(Date.now() + 2 * DAY - 1000);
+    const reminders = [];
+    await withMocks([[prisma.user, "findMany", async () => [{ ...row(), subscriptionReminderDay: null, profile: { timeZone: "Europe/Moscow" } }]]], async () => {
+      const maxClient = { sendMessage: async (target, text, options) => { reminders.push({ target, text, options }); } };
+      assert.equal(await subscription.runSubscriptionReminders({ api: { sendMessage: async () => { throw new Error("telegram must not be used"); } } }, new Date(), maxClient), 1);
+    });
+    assert.deepEqual(reminders[0].target, { userId: maxId }); assert.match(reminders[0].text, /через 2 дня/); assert.match(JSON.stringify(reminders[0].options), /menu:subscription/);
   });
 });

@@ -4,6 +4,7 @@ import { MaxApiClient } from "./client";
 import type { MaxBotContext, MaxUpdate, MaxUser } from "./types";
 import { Prisma, prisma } from "@receipt-bot/db";
 import { logger } from "../services/logger";
+import { parseReceiptBranding, type ReceiptBranding } from "@receipt-bot/shared";
 
 const splitName = (name?: string): { firstName?: string; lastName?: string } => {
   if (!name) {
@@ -35,6 +36,13 @@ const normalizeUser = (user?: MaxUser): MaxBotContext["user"] | null => {
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+/** Branding editor draft: undefined = editor closed, null = standard header chosen; an empty draft stays open. */
+const parseBrandingDraft = (value: unknown): ReceiptBranding | null | undefined => {
+  if (value === null) return null;
+  if (!isObject(value) || typeof value.name !== "string" || typeof value.subtitle !== "string" || (value.logoFileName !== null && typeof value.logoFileName !== "string")) return undefined;
+  return parseReceiptBranding(value) ?? { logoFileName: null, name: "", subtitle: "" };
+};
+
 const normalizeSession = (value: unknown): BotSession => {
   const initial = createInitialSession();
 
@@ -42,7 +50,9 @@ const normalizeSession = (value: unknown): BotSession => {
     return initial;
   }
 
+  const brandingDraft = parseBrandingDraft(value.brandingDraft);
   return {
+    ...(brandingDraft !== undefined ? { brandingDraft } : {}),
     awaitingInput:
       value.awaitingInput === null || typeof value.awaitingInput === "string"
         ? (value.awaitingInput as BotSession["awaitingInput"])

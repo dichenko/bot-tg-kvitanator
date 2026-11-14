@@ -4,26 +4,30 @@ import { prisma, type User } from "@receipt-bot/db";
 import { resolveTimeZone } from "@receipt-bot/shared";
 import { config } from "../config";
 import type { BotContext } from "../types";
+import type { MaxMessageOptions } from "../max/types";
 import { logger } from "./logger";
 
-// TEST MODE NOTE: the subscription is a Telegram-only pilot for a single user
-// (DAILY_STATS_TELEGRAM_ID, gated by RECEIPT_BRANDING_TEST_ENABLED). Payment is simulated:
-// "Buy" grants SUBSCRIPTION_DAYS at once. To roll out to everyone, replace
-// `isSubscriptionTestUser`/`canUseSubscription` with a real check, connect a payment
-// provider in `purchaseSubscription`, and add the same flow to MAX.
+// The subscription is available to all Telegram users (private chat) and all MAX users (the test mode
+// for a single user is over). RECEIPT_BRANDING_TEST_ENABLED remains the common on/off switch. Payment is
+// not connected yet: "Buy" grants SUBSCRIPTION_DAYS at once as a gift for the first users. Before charging
+// money, connect a payment provider in `purchaseSubscription`. The subscription belongs to the User row.
 export const SUBSCRIPTION_DAYS = 365;
 export const SUBSCRIPTION_PRICE_PER_MONTH_RUB = 60;
 /** The renewal button appears, and reminders start, this many days before the end. */
 export const RENEWAL_WINDOW_DAYS = 3;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-export const isSubscriptionTestUser = (telegramId: number | bigint | undefined | null): boolean =>
-  config.receiptBrandingTestEnabled && telegramId != null
-  && (typeof telegramId === "bigint" || Number.isSafeInteger(telegramId))
-  && BigInt(telegramId) === BigInt(config.dailyStatsTelegramId);
+/** `platformId` is a Telegram or MAX user id (positive integer); the flag is the common switch. */
+export const isSubscriptionAvailable = (platformId: number | bigint | undefined | null): boolean =>
+  config.receiptBrandingTestEnabled && platformId != null
+  && (typeof platformId === "bigint" ? platformId > 0n : Number.isSafeInteger(platformId) && platformId > 0);
+
+const hasPlatformId = (user: { telegramId?: bigint | number | null; maxId?: bigint | number | null }): boolean =>
+  isSubscriptionAvailable(user.telegramId) || isSubscriptionAvailable(user.maxId);
+export const isSubscriptionAvailableForUser = hasPlatformId;
 
 export const canUseSubscription = (ctx: { from?: { id: number }; chat?: { id: number; type: string } }): boolean =>
-  isSubscriptionTestUser(ctx.from?.id) && ctx.chat?.type === "private" && ctx.chat.id === ctx.from?.id;
+  isSubscriptionAvailable(ctx.from?.id) && ctx.chat?.type === "private" && ctx.chat.id === ctx.from?.id;
 
 export const hasActiveSubscription = (until: Date | null | undefined, now = new Date()): boolean =>
   !!until && until.getTime() > now.getTime();
@@ -47,14 +51,14 @@ export const pluralizeDays = (count: number): string => {
 };
 
 /**
- * Simulated purchase. A new/expired subscription starts now; a renewal (allowed only within
+ * Gift purchase (no payment yet). A new/expired subscription starts now; a renewal (allowed only within
  * RENEWAL_WINDOW_DAYS of the end) is appended to the current end date. The compare-and-swap on the
  * previous value makes a double tap or parallel updates grant the period only once.
  * Returns the new end date, or null when buying is not allowed or someone else won the race.
  */
 export const purchaseSubscription = async (userId: number, now = new Date()): Promise<Date | null> => {
-  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { telegramId: true, subscriptionUntil: true } });
-  if (!isSubscriptionTestUser(user.telegramId)) throw new Error("Подписка недоступна.");
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { telegramId: true, maxId: true, subscriptionUntil: true } });
+  if (!hasPlatformId(user)) throw new Error("Подписка недоступна.");
   if (!canRenewSubscription(user.subscriptionUntil, now)) return null;
   const base = hasActiveSubscription(user.subscriptionUntil, now) ? user.subscriptionUntil!.getTime() : now.getTime();
   const until = new Date(base + SUBSCRIPTION_DAYS * DAY_MS);
@@ -97,31 +101,37 @@ export const buildReminderText = (daysLeft: number, until: Date, timeZone: strin
  * Sends the 3/2/1-day reminders. `subscriptionReminderDay` is claimed with a compare-and-swap
  * before sending, so parallel replicas or repeated ticks never send the same reminder twice.
  */
-export const runSubscriptionReminders = async (bot: Bot<BotContext>, now = new Date()): Promise<number> => {
+export type ReminderMaxClient = { sendMessage(target: { userId?: number }, text: string, options?: MaxMessageOptions): Promise<void> };
+
+export const runSubscriptionReminders = async (bot: Bot<BotContext>, now = new Date(), maxClient: ReminderMaxClient | null = null): Promise<number> => {
   if (!config.receiptBrandingTestEnabled) return 0;
   const candidates = await prisma.user.findMany({
     where: {
-      telegramId: BigInt(config.dailyStatsTelegramId),
+      OR: [{ telegramId: { not: null } }, { maxId: { not: null } }],
       subscriptionUntil: { gt: now, lte: new Date(now.getTime() + RENEWAL_WINDOW_DAYS * DAY_MS) }
     },
-    select: { id: true, telegramId: true, subscriptionUntil: true, subscriptionReminderDay: true, profile: { select: { timeZone: true } } }
+    select: { id: true, telegramId: true, maxId: true, subscriptionUntil: true, subscriptionReminderDay: true, profile: { select: { timeZone: true } } }
   });
   let sent = 0;
   for (const user of candidates) {
     const days = subscriptionDaysLeft(user.subscriptionUntil, now);
-    if (!days || !user.telegramId || (user.subscriptionReminderDay !== null && user.subscriptionReminderDay <= days)) continue;
+    // A user with both ids is reminded in Telegram only; a MAX-only user needs the MAX client.
+    if (!days || (!user.telegramId && !(user.maxId && maxClient)) || (user.subscriptionReminderDay !== null && user.subscriptionReminderDay <= days)) continue;
     const claimed = await prisma.user.updateMany({
       where: { id: user.id, subscriptionUntil: user.subscriptionUntil, subscriptionReminderDay: user.subscriptionReminderDay },
       data: { subscriptionReminderDay: days }
     });
     if (!claimed.count) continue;
     try {
-      await bot.api.sendMessage(Number(user.telegramId), buildReminderText(days, user.subscriptionUntil!, user.profile?.timeZone),
-        { reply_markup: new InlineKeyboard().text("⭐ Моя подписка", "menu:subscription") });
+      const text = buildReminderText(days, user.subscriptionUntil!, user.profile?.timeZone);
+      if (user.telegramId) await bot.api.sendMessage(Number(user.telegramId), text, { reply_markup: new InlineKeyboard().text("⭐ Моя подписка", "menu:subscription") });
+      else await maxClient!.sendMessage({ userId: Number(user.maxId) }, text, { keyboard: [[{ text: "⭐ Моя подписка", payload: "menu:subscription" }]] });
       sent++;
     } catch (error) {
-      // A blocked bot (403) is final; anything else is retried on the next tick.
-      if (!(error instanceof GrammyError && error.error_code === 403)) {
+      // A blocked bot (Telegram 403, MAX HTTP 4xx) is final; anything else is retried on the next tick.
+      const final = user.telegramId ? error instanceof GrammyError && error.error_code === 403
+        : error instanceof Error && /returned HTTP 4\d\d/.test(error.message);
+      if (!final) {
         await prisma.user.updateMany({ where: { id: user.id, subscriptionReminderDay: days }, data: { subscriptionReminderDay: user.subscriptionReminderDay } });
       }
       logger.warn({ err: error, userId: user.id }, "Subscription reminder delivery failed");
@@ -130,9 +140,9 @@ export const runSubscriptionReminders = async (bot: Bot<BotContext>, now = new D
   return sent;
 };
 
-export const startSubscriptionReminderScheduler = (bot: Bot<BotContext>, intervalMs = 10 * 60_000): NodeJS.Timeout => {
+export const startSubscriptionReminderScheduler = (bot: Bot<BotContext>, maxClient: ReminderMaxClient | null = null, intervalMs = 10 * 60_000): NodeJS.Timeout => {
   const tick = (): void => {
-    void runSubscriptionReminders(bot).catch(error => logger.error({ err: error }, "Subscription reminders failed"));
+    void runSubscriptionReminders(bot, new Date(), maxClient).catch(error => logger.error({ err: error }, "Subscription reminders failed"));
   };
   logger.info({ intervalMs }, "Subscription reminder scheduler started");
   return setInterval(tick, intervalMs);

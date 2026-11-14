@@ -1,4 +1,4 @@
-﻿import { InlineKeyboard, InputFile, type Bot } from "grammy";
+import { InlineKeyboard, InputFile, type Bot } from "grammy";
 import { parseReceiptBranding, type ReceiptBranding } from "@receipt-bot/shared";
 import type { EntrepreneurProfile } from "@receipt-bot/db";
 import type { BotContext } from "../types";
@@ -21,7 +21,7 @@ const backToSubscription = () => new InlineKeyboard().text("⬅️ Моя под
 const draft = (ctx: BotContext): ReceiptBranding => ctx.session.brandingDraft ?? { logoFileName: null, name: "", subtitle: "" };
 const show = async (ctx: BotContext, message?: string) => {
   const value = parseReceiptBranding(ctx.session.brandingDraft);
-  await sendMenu(ctx, [message, "Оформление квитанции · тестовый режим", "",
+  await sendMenu(ctx, [message, "Оформление квитанции", "",
     value ? `Логотип: ${value.logoFileName ? "загружен" : "без картинки"}\nНазвание: ${value.name || "скрыто"}\nПодпись: ${value.subtitle || "скрыта"}` : "Стандартная шапка «Квитанатор».",
     "", "Изменения применятся к новым квитанциям после сохранения."].filter(line => line !== undefined).join("\n"), keyboard());
 };
@@ -54,7 +54,7 @@ export const registerBrandingHandlers = (bot: Bot<BotContext>): void => {
   bot.callbackQuery(/^branding:/, async ctx => {
     if (!canConfigureBranding(ctx)) {
       clearBrandingDraft(ctx.session);
-      await ctx.answerCallbackQuery({ text: "Тестовое оформление недоступно.", show_alert: true });
+      await ctx.answerCallbackQuery({ text: "Оформление квитанции недоступно.", show_alert: true });
       return;
     }
     await ctx.answerCallbackQuery().catch(() => undefined);

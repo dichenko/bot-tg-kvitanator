@@ -1,4 +1,4 @@
-﻿import { promises as fs } from "node:fs";
+import { promises as fs } from "node:fs";
 import { InputFile } from "grammy";
 import { prisma, OperationStatus, Prisma, RenderJobStatus } from "@receipt-bot/db";
 import type { EntrepreneurProfile, Operation, Service, User } from "@receipt-bot/db";
@@ -30,7 +30,7 @@ export const buildReceiptPreviewText = (services: Service[], draft: ReceiptDraft
 export const createOperationWithSnapshots = async (user: User, profile: EntrepreneurProfile, services: Service[], draft: ReceiptDraft, channel: "TELEGRAM" | "MAX"): Promise<Operation> => {
   if (!draft.items.length || !draft.paymentMethod) throw new Error("Черновик квитанции неполный.");
   const paymentMethod = draft.paymentMethod;
-  const branding = brandingForOperation(user.telegramId, channel, profile.receiptBranding, user.subscriptionUntil);
+  const branding = brandingForOperation(channel === "MAX" ? user.maxId : user.telegramId, profile.receiptBranding, user.subscriptionUntil);
   return prisma.$transaction(async tx => { const itemData = draft.items.map(i => { const s = i.serviceId ? services.find(x => x.id === i.serviceId) : undefined; const title = i.title ?? s?.title; if (!title || !i.price || (i.serviceId && !s)) throw new Error("Не удалось найти услугу или цену."); const quantity = new Prisma.Decimal(i.quantity); const price = new Prisma.Decimal(i.price); return { serviceId: s?.id ?? null, title, quantity, price, amount: quantity.mul(price) }; }); const total = itemData.reduce((sum, i) => sum.add(i.amount), new Prisma.Decimal(0)); const operation = await tx.operation.create({ data: { userId: user.id, channel, profileId: profile.id, serviceId: itemData[0].serviceId, receiptNumber: await nextNumber(user.id, tx), innSnapshot: profile.inn, ogrnSnapshot: profile.ogrn, timeZoneSnapshot: resolveTimeZone(profile.timeZone), brandingSnapshot: branding ? { ...branding } : Prisma.DbNull, ipFullNameSnapshot: profile.ipFullName, addressSnapshot: profile.address, serviceTitleSnapshot: itemData[0].title, amount: total, paymentMethod, calculationType: draft.calculationType ?? "INCOME", status: OperationStatus.RENDERING, items: { create: itemData } } }); await tx.renderJob.create({ data: { operationId: operation.id, status: RenderJobStatus.PROCESSING, attempts: 1 } }); return operation; });
 };
 const payload = (o: Operation & { items: { title: string; quantity: Prisma.Decimal; price: Prisma.Decimal; amount: Prisma.Decimal }[] }) => ({ operationId: o.id, receiptNumber: o.receiptNumber, createdAt: o.createdAt.toISOString(), timeZone: o.timeZoneSnapshot, branding: parseReceiptBranding(o.brandingSnapshot), inn: o.innSnapshot, ogrn: o.ogrnSnapshot, ipFullName: o.ipFullNameSnapshot, address: o.addressSnapshot, calculationType: o.calculationType, items: o.items.map(i => ({ title: i.title, quantity: i.quantity.toString(), price: i.price.toString(), amount: i.amount.toString() })), amount: o.amount.toString(), paymentMethod: o.paymentMethod });

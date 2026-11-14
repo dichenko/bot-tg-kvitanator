@@ -7,18 +7,18 @@ import { BRANDING_NAME_LIMIT, BRANDING_SUBTITLE_LIMIT, parseReceiptBranding, typ
 import { config } from "../config";
 import { renderReceipt } from "./rendererClient";
 import { markLogoSaved, protectReplacedLogo, registerTemporaryLogo } from "./brandingStorage";
-import { canUseSubscription, hasActiveSubscription, isSubscriptionTestUser } from "./subscriptionService";
+import { canUseSubscription, hasActiveSubscription, isSubscriptionAvailable } from "./subscriptionService";
 
 export const MAX_LOGO_BYTES = 5 * 1024 * 1024;
-// Branding is a paid feature: the pilot gate is shared with the subscription (see subscriptionService).
-export const isBrandingTestUser = isSubscriptionTestUser;
+// Branding is a paid feature: availability is shared with the subscription (see subscriptionService).
+export const isBrandingAvailable = isSubscriptionAvailable;
 export const canConfigureBranding = canUseSubscription;
 
-/** Branding applies only to Telegram receipts of a pilot user with an active subscription. */
+/** Branding applies to receipts of a user (`platformId`: Telegram or MAX id of the channel) with an active subscription. */
 export const brandingForOperation = (
-  telegramId: number | bigint | undefined | null, channel: "TELEGRAM" | "MAX", value: unknown,
+  platformId: number | bigint | undefined | null, value: unknown,
   subscriptionUntil?: Date | null, now = new Date()
-): ReceiptBranding | null => channel === "TELEGRAM" && isBrandingTestUser(telegramId) && hasActiveSubscription(subscriptionUntil, now)
+): ReceiptBranding | null => isBrandingAvailable(platformId) && hasActiveSubscription(subscriptionUntil, now)
   ? parseReceiptBranding(value) : null;
 
 export const validateBrandingText = (text: string, field: "name" | "subtitle"): string => {
@@ -50,6 +50,29 @@ export const readLimitedLogoBody = async (response: Response): Promise<Buffer> =
   }
 };
 
+const readLogoResponse = async (response: Response): Promise<Buffer> => {
+  try { return await readLimitedLogoBody(response); }
+  catch (error) {
+    if (error instanceof Error && error.message.startsWith("Размер логотипа")) throw error;
+    throw new Error("Не удалось скачать логотип. Отправьте файл ещё раз.");
+  }
+};
+
+/** MAX sends a temporary file URL in the attachment: only plain public https hosts, no redirects, no credentials. */
+export const downloadMaxLogo = async (rawUrl: string): Promise<Buffer> => {
+  let url: URL;
+  try { url = new URL(rawUrl); } catch { throw new Error("Не удалось получить файл MAX. Отправьте его ещё раз."); }
+  const host = url.hostname.toLowerCase();
+  if (url.protocol !== "https:" || url.username || url.password || (url.port && url.port !== "443")
+    || !host.includes(".") || host.startsWith("[") || /^[0-9.]+$/.test(host) || /\.(local|localhost|internal)$/.test(host)) {
+    throw new Error("Не удалось получить файл MAX. Отправьте его ещё раз.");
+  }
+  let response: Response;
+  try { response = await fetch(url, { redirect: "error", signal: AbortSignal.timeout(20_000) }); }
+  catch { throw new Error("Не удалось скачать логотип. Отправьте файл ещё раз."); }
+  return readLogoResponse(response);
+};
+
 export const downloadTelegramLogo = async (filePath: string): Promise<Buffer> => {
   // The URL contains the bot token: never persist it or include fetch errors in logs/replies.
   if (!/^[a-zA-Z0-9_./-]+$/.test(filePath) || filePath.split("/").includes("..")) throw new Error("Не удалось получить файл Telegram.");
@@ -59,11 +82,7 @@ export const downloadTelegramLogo = async (filePath: string): Promise<Buffer> =>
   } catch {
     throw new Error("Не удалось скачать логотип. Отправьте файл ещё раз.");
   }
-  try { return await readLimitedLogoBody(response); }
-  catch (error) {
-    if (error instanceof Error && error.message.startsWith("Размер логотипа")) throw error;
-    throw new Error("Не удалось скачать логотип. Отправьте файл ещё раз.");
-  }
+  return readLogoResponse(response);
 };
 
 export const normalizeLogo = async (input: Buffer): Promise<Buffer> => {
@@ -100,8 +119,8 @@ export const storeLogo = async (input: Buffer, receiptsDir = config.receiptsDir)
 };
 
 export const saveReceiptBranding = async (userId: number, branding: ReceiptBranding | null): Promise<void> => {
-  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { telegramId: true, subscriptionUntil: true } });
-  if (!isBrandingTestUser(user.telegramId)) throw new Error("Тестовое оформление недоступно.");
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { telegramId: true, maxId: true, subscriptionUntil: true } });
+  if (!isBrandingAvailable(user.telegramId) && !isBrandingAvailable(user.maxId)) throw new Error("Оформление квитанции недоступно.");
   if (!hasActiveSubscription(user.subscriptionUntil)) throw new Error("Брендированная квитанция доступна по подписке.");
   const value = parseReceiptBranding(branding);
   if (branding && !value && (branding.logoFileName || branding.name || branding.subtitle)) throw new Error("Некорректное оформление.");

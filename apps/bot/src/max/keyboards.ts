@@ -1,5 +1,6 @@
 import type { Operation, PaymentMethod, ReceiptCalculationType, Service } from "@receipt-bot/db";
 import type { MaxKeyboard } from "./types";
+import { config } from "../config";
 import { DEFAULT_TIME_ZONE, TIME_ZONE_OPTIONS, formatTimeZoneButtonLabel, formatTimeZoneLabel } from "@receipt-bot/shared";
 
 export const mainMenuKeyboard = (): MaxKeyboard => [
@@ -11,8 +12,29 @@ export const mainMenuKeyboard = (): MaxKeyboard => [
   [
     { text: "📄 Квитанции", payload: "menu:operations" },
     { text: "👤 Данные ИП", payload: "menu:profile" }
-  ]
+  ],
+  ...(config.receiptBrandingTestEnabled ? [[{ text: "⭐ Моя подписка", payload: "menu:subscription" }]] : [])
 ];
+
+export const subscriptionKeyboard = (active: boolean, canRenew: boolean): MaxKeyboard => {
+  if (!active) return [[{ text: "💳 Купить подписку", payload: "sub:buy" }], [{ text: "⬅️ Назад", payload: "menu:main" }]];
+  return [
+    [{ text: "🖼 Добавить свой логотип", payload: "branding:open" }],
+    [{ text: "🔄 Синхронизировать Max и TG", payload: "sub:sync" }],
+    ...(canRenew ? [[{ text: "💳 Продлить подписку", payload: "sub:buy" }]] : []),
+    [{ text: "⬅️ Назад", payload: "menu:main" }]
+  ];
+};
+
+export const brandingKeyboard = (): MaxKeyboard => [
+  [{ text: "🖼 Загрузить логотип", payload: "branding:logo" }],
+  [{ text: "✏️ Название", payload: "branding:name" }, { text: "✏️ Подпись", payload: "branding:subtitle" }],
+  [{ text: "👁 Предпросмотр", payload: "branding:preview" }],
+  [{ text: "✅ Сохранить", payload: "branding:save" }, { text: "Отмена", payload: "branding:cancel" }],
+  [{ text: "Вернуть стандартное оформление", payload: "branding:reset" }]
+];
+
+export const backToSubscriptionKeyboard = (): MaxKeyboard => [[{ text: "⬅️ Моя подписка", payload: "menu:subscription" }]];
 
 export const profileKeyboard = (): MaxKeyboard => [
   [{ text: "✏️ Изменить ИНН", payload: "profile:edit:inn" }],
