@@ -10,11 +10,12 @@ import { buildExportFile, getOperationsForExport } from "../services/exportServi
 import { getActiveService, getProfileByUserId, listActiveServices, softDeleteService, updateProfileTimeZone, upsertTelegramUser } from "../services/userService";
 import { buildProfileTimeZoneLines, buildRegistrationCompleteText, buildTimeZonePickerText, parseTimeZoneCallback } from "../services/timeZoneService";
 import type { BotContext } from "../types";
+import { buildServicesListText } from "../utils/formatters";
 import { clearReceiptDraft } from "../utils/state";
 import { sendMenu } from "../utils/telegram";
 
 const ensure = async (ctx: BotContext) => { const user = await upsertTelegramUser(ctx.from!); const profile = await getProfileByUserId(user.id); if (!profile) { await startRegistration(ctx); return null; } return { user, profile }; };
-const showServices = async (ctx: BotContext, userId: number) => { const s = await listActiveServices(userId); await sendMenu(ctx, ["Активные услуги:", "", ...(s.length ? s.map((x, i) => `${i + 1}. ${x.title}`) : ["Список услуг пока пуст."])].join("\n"), servicesKeyboard()); };
+const showServices = async (ctx: BotContext, userId: number) => { const s = await listActiveServices(userId); await sendMenu(ctx, buildServicesListText(s), servicesKeyboard()); };
 const selectService = async (ctx: BotContext, userId: number) => { const s = await listActiveServices(userId); await sendMenu(ctx, "Выберите услугу/товар:", serviceSelectionKeyboard(s, "receipt:service", true, true)); };
 const preview = async (ctx: BotContext, userId: number) => { const d = ctx.session.receiptDraft; const services = await listActiveServices(userId); if (!d?.items.length || d.items.some(x => !x.price) || !d.paymentMethod) return void await ctx.reply("Заполните цену для позиции."); await sendMenu(ctx, buildReceiptPreviewText(services, d), receiptPreviewKeyboard(d.paymentMethod, d.calculationType ?? "INCOME"), { parse_mode: "HTML" }); };
 const showOps = async (ctx: BotContext, userId: number) => { const ops = await listRecentOperations(userId); await sendMenu(ctx, buildOperationsSummary(ops), operationsKeyboard(ops)); };

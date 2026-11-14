@@ -15,3 +15,6 @@ export const formatDateTime = (date: Date, timeZone: string | null | undefined):
 export const formatPaymentMethod = (paymentMethod: PaymentMethod): string => PAYMENT_METHOD_LABELS[paymentMethod];
 
 export const formatOperationStatus = (status: OperationStatus): string => OPERATION_STATUS_LABELS[status];
+
+export const buildServicesListText = (services: { title: string }[]): string =>
+  ["Активные услуги:", "", ...(services.length ? services.map((service, index) => `${index + 1}. ${service.title}`) : ["Список услуг пока пуст."])].join("\n");
