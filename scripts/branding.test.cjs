@@ -509,3 +509,10 @@ test("MAX: subscription menu, gift purchase, sync stub, branding editor with log
     assert.deepEqual(reminders[0].target, { userId: maxId }); assert.match(reminders[0].text, /через 2 дня/); assert.match(JSON.stringify(reminders[0].options), /menu:subscription/);
   });
 });
+
+test("a static WebP logo is accepted and stored as PNG; unknown formats are rejected", async () => {
+  const webp = await sharp({ create: { width: 400, height: 200, channels: 4, background: { r: 10, g: 20, b: 200, alpha: 1 } } }).webp().toBuffer();
+  const out = await service.normalizeLogo(webp);
+  assert.equal((await sharp(out).metadata()).format, "png");
+  await assert.rejects(service.normalizeLogo(Buffer.from("GIF89a-not-an-image-at-all")), /PNG, JPEG или WebP/);
+});

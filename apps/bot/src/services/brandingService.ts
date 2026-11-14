@@ -5,6 +5,7 @@ import sharp from "sharp";
 import { prisma, Prisma, type EntrepreneurProfile } from "@receipt-bot/db";
 import { BRANDING_NAME_LIMIT, BRANDING_SUBTITLE_LIMIT, parseReceiptBranding, type ReceiptBranding } from "@receipt-bot/shared";
 import { config } from "../config";
+import { logger } from "./logger";
 import { renderReceipt } from "./rendererClient";
 import { markLogoSaved, protectReplacedLogo, registerTemporaryLogo } from "./brandingStorage";
 import { canUseSubscription, hasActiveSubscription, isSubscriptionAvailable } from "./subscriptionService";
@@ -89,7 +90,12 @@ export const normalizeLogo = async (input: Buffer): Promise<Buffer> => {
   if (input.length > MAX_LOGO_BYTES) throw new Error("Размер логотипа — не больше 5 МБ.");
   const png = input.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
   const jpeg = input[0] === 255 && input[1] === 216 && input[2] === 255;
-  if (!png && !jpeg) throw new Error("Отправьте статичную картинку PNG или JPEG.");
+  // MAX may re-encode a sent picture to WebP; a static WebP is decoded and stored as PNG like the others.
+  const webp = input.subarray(0, 4).toString("ascii") === "RIFF" && input.subarray(8, 12).toString("ascii") === "WEBP";
+  if (!png && !jpeg && !webp) {
+    logger.warn({ size: input.length, head: input.subarray(0, 12).toString("hex") }, "Logo rejected: unsupported image signature");
+    throw new Error("Отправьте статичную картинку PNG, JPEG или WebP.");
+  }
   try {
     // APNG may be decoded as its first frame: explicitly reject its animation chunk.
     if (png) for (let offset = 8; offset + 12 <= input.length;) {
@@ -99,12 +105,12 @@ export const normalizeLogo = async (input: Buffer): Promise<Buffer> => {
     }
     const image = sharp(input, { limitInputPixels: 16_000_000, failOn: "error" });
     const metadata = await image.metadata();
-    if (!["png", "jpeg"].includes(metadata.format ?? "") || (metadata.pages ?? 1) !== 1) throw new Error("format");
+    if (!["png", "jpeg", "webp"].includes(metadata.format ?? "") || (metadata.pages ?? 1) !== 1) throw new Error("format");
     if (!metadata.width || !metadata.height || metadata.width > 4096 || metadata.height > 4096) throw new Error("dimensions");
     // Decode/re-encode the pixels, preserving transparency and removing input metadata.
     return await image.rotate().resize(320, 128, { fit: "inside", withoutEnlargement: true }).png().toBuffer();
   } catch {
-    throw new Error("Не удалось обработать изображение. Нужен PNG или JPEG до 4096 пикселей по стороне и 16 мегапикселей, без анимации.");
+    throw new Error("Не удалось обработать изображение. Нужен PNG, JPEG или WebP до 4096 пикселей по стороне и 16 мегапикселей, без анимации.");
   }
 };
 
