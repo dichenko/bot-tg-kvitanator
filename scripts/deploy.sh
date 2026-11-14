@@ -37,12 +37,11 @@ test -s "$backup_file"
 printf 'Database backup saved: %s\n' "$backup_file"
 
 docker compose run --rm --no-deps bot node scripts/run-prisma.cjs migrate deploy
-docker compose up -d --no-deps renderer-worker bot
 
 wait_for_health() {
   local url=$1
   for ((attempt=1; attempt<=30; attempt++)); do
-    if curl --fail --silent --show-error --max-time 3 "$url" > /dev/null; then
+    if curl --fail --silent --show-error --max-time 3 "$url" > /dev/null 2>&1; then
       return 0
     fi
     sleep 3
@@ -50,7 +49,10 @@ wait_for_health() {
   printf 'Health check failed: %s\n' "$url" >&2
   return 1
 }
+# Release order: renderer first (must be ready and accept the new payload), then the bot.
+docker compose up -d --no-deps renderer-worker
 wait_for_health http://127.0.0.1:3001/health
+docker compose up -d --no-deps bot
 wait_for_health http://127.0.0.1:3000/health
 
 # Verify PostgreSQL and Telegram authentication without sending any messages.
