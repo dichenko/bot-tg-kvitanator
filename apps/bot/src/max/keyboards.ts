@@ -1,5 +1,6 @@
 import type { Operation, PaymentMethod, ReceiptCalculationType, Service } from "@receipt-bot/db";
 import type { MaxKeyboard } from "./types";
+import { DEFAULT_TIME_ZONE, TIME_ZONE_OPTIONS, formatTimeZoneButtonLabel, formatTimeZoneLabel } from "@receipt-bot/shared";
 
 export const mainMenuKeyboard = (): MaxKeyboard => [
   [{ text: "➕ Новая квитанция", payload: "menu:receipt:new" }],
@@ -18,7 +19,24 @@ export const profileKeyboard = (): MaxKeyboard => [
   [{ text: "✏️ Изменить ФИО ИП", payload: "profile:edit:full_name" }],
   [{ text: "✏️ Изменить адрес", payload: "profile:edit:address" }],
   [{ text: "✏️ Изменить ОГРН", payload: "profile:edit:ogrn" }],
+  [{ text: "🕒 Изменить часовой пояс", payload: "profile:tz" }],
   [{ text: "⬅️ Назад", payload: "menu:main" }]
+];
+
+/** Registration screen: default МСК first, the other zones below. */
+export const registrationTimeZoneKeyboard = (): MaxKeyboard => [
+  [{ text: `Продолжить с ${formatTimeZoneLabel(DEFAULT_TIME_ZONE)}`, payload: "tz:reg:0" }],
+  ...TIME_ZONE_OPTIONS.filter((item) => item.zoneId !== DEFAULT_TIME_ZONE).map((item) => [
+    { text: formatTimeZoneButtonLabel(item), payload: `tz:reg:${item.offset}` }
+  ])
+];
+
+/** Profile screen: all zones, the current one is marked. */
+export const timeZoneSelectKeyboard = (currentTimeZone: string): MaxKeyboard => [
+  ...TIME_ZONE_OPTIONS.map((item) => [
+    { text: `${item.zoneId === currentTimeZone ? "✅ " : ""}${formatTimeZoneButtonLabel(item)}`, payload: `tz:set:${item.offset}` }
+  ]),
+  [{ text: "⬅️ Назад", payload: "menu:profile" }]
 ];
 
 export const servicesKeyboard = (): MaxKeyboard => [

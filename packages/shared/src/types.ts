@@ -16,6 +16,8 @@ export interface RenderReceiptRequest {
   operationId: number;
   receiptNumber: string;
   createdAt: string;
+  /** IANA zone saved on the operation (timeZoneSnapshot); renderer falls back to its default when absent. */
+  timeZone?: string;
   inn: string;
   ipFullName: string;
   address: string;

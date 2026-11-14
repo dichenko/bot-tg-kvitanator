@@ -6,5 +6,5 @@ for (const project of ["packages/db", "packages/shared", "apps/bot"]) {
   const result = spawnSync(process.execPath, [compiler, "-p", path.join(root, project, "tsconfig.json")], { stdio: "inherit" });
   if (result.status !== 0) process.exit(result.status || 1);
 }
-const result = spawnSync(process.execPath, ["--test", "scripts/statistics.test.cjs", "scripts/statistics-widget.test.cjs"], { cwd: root, stdio: "inherit" });
+const result = spawnSync(process.execPath, ["--test", "scripts/statistics.test.cjs", "scripts/statistics-widget.test.cjs", "scripts/timezone.test.cjs"], { cwd: root, stdio: "inherit" });
 process.exit(result.status || 0);

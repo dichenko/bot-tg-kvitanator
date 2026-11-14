@@ -1,5 +1,5 @@
 import type { OperationStatus, PaymentMethod } from "@receipt-bot/db";
-import { OPERATION_STATUS_LABELS, PAYMENT_METHOD_LABELS } from "@receipt-bot/shared";
+import { OPERATION_STATUS_LABELS, PAYMENT_METHOD_LABELS, formatDateTimeInZone } from "@receipt-bot/shared";
 
 export const formatAmount = (value: string | number | { toString(): string }): string => {
   const numeric = typeof value === "string" ? Number(value) : Number(value);
@@ -10,12 +10,7 @@ export const formatAmount = (value: string | number | { toString(): string }): s
   }).format(numeric);
 };
 
-export const formatDateTime = (date: Date, timeZone: string): string =>
-  new Intl.DateTimeFormat("ru-RU", {
-    dateStyle: "short",
-    timeStyle: "short",
-    timeZone
-  }).format(date);
+export const formatDateTime = (date: Date, timeZone: string | null | undefined): string => formatDateTimeInZone(date, timeZone, ", ");
 
 export const formatPaymentMethod = (paymentMethod: PaymentMethod): string => PAYMENT_METHOD_LABELS[paymentMethod];
 

@@ -1,5 +1,6 @@
 import type { Operation, PaymentMethod, ReceiptCalculationType, Service } from "@receipt-bot/db";
 import { InlineKeyboard } from "grammy";
+import { DEFAULT_TIME_ZONE, TIME_ZONE_OPTIONS, formatTimeZoneButtonLabel, formatTimeZoneLabel } from "@receipt-bot/shared";
 
 export const mainMenuKeyboard = (): InlineKeyboard =>
   new InlineKeyboard()
@@ -23,7 +24,32 @@ export const profileKeyboard = (): InlineKeyboard =>
     .row()
     .text("✏️ Изменить ОГРН", "profile:edit:ogrn")
     .row()
+    .text("🕒 Изменить часовой пояс", "profile:tz")
+    .row()
     .text("⬅️ Назад", "menu:main");
+
+/** Registration screen: default МСК first, the other zones below. */
+export const registrationTimeZoneKeyboard = (): InlineKeyboard => {
+  const keyboard = new InlineKeyboard().text(`Продолжить с ${formatTimeZoneLabel(DEFAULT_TIME_ZONE)}`, "tz:reg:0").row();
+
+  TIME_ZONE_OPTIONS.filter((item) => item.zoneId !== DEFAULT_TIME_ZONE).forEach((item) => {
+    keyboard.text(formatTimeZoneButtonLabel(item), `tz:reg:${item.offset}`).row();
+  });
+
+  return keyboard;
+};
+
+/** Profile screen: all zones, the current one is marked. */
+export const timeZoneSelectKeyboard = (currentTimeZone: string): InlineKeyboard => {
+  const keyboard = new InlineKeyboard();
+
+  TIME_ZONE_OPTIONS.forEach((item) => {
+    const mark = item.zoneId === currentTimeZone ? "✅ " : "";
+    keyboard.text(`${mark}${formatTimeZoneButtonLabel(item)}`, `tz:set:${item.offset}`).row();
+  });
+
+  return keyboard.text("⬅️ Назад", "menu:profile");
+};
 
 export const servicesKeyboard = (): InlineKeyboard =>
   new InlineKeyboard()
