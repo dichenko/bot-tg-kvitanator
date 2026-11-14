@@ -109,7 +109,7 @@ export const operationsKeyboard = (operations: Operation[]): InlineKeyboard => {
 
   operations
     .forEach((operation) => {
-      keyboard.text(`👁 Показать ${operation.receiptNumber}`, `history:show:${operation.id}`).text("🗑 Удалить", `history:delete:${operation.id}`).row();
+      keyboard.text(`👁 ${operation.receiptNumber}`, `history:show:${operation.id}`).text("🗑", `history:delete:${operation.id}`).row();
     });
   keyboard.text("⬅️ Вернуться в меню", "menu:main");
   return keyboard;

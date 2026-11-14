@@ -86,7 +86,7 @@ export const receiptPreviewKeyboard = (currentPaymentMethod: PaymentMethod, calc
 
 export const operationsKeyboard = (operations: Operation[]): MaxKeyboard => {
   const rows: MaxKeyboard = operations
-    .flatMap((operation) => [[{ text: `👁 Показать ${operation.receiptNumber}`, payload: `history:show:${operation.id}` }], [{ text: "🗑 Удалить", payload: `history:delete:${operation.id}` }]]);
+    .flatMap((operation) => [[{ text: `👁 ${operation.receiptNumber}`, payload: `history:show:${operation.id}` }, { text: "🗑", payload: `history:delete:${operation.id}` }]]);
 
   rows.push([{ text: "⬅️ Вернуться в меню", payload: "menu:main" }]);
   return rows;
