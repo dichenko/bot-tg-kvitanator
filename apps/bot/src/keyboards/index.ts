@@ -16,15 +16,17 @@ export const mainMenuKeyboard = (showSubscription = false): InlineKeyboard => {
   return keyboard;
 };
 
+export const backToSubscriptionKeyboard = (): InlineKeyboard => new InlineKeyboard().text("⬅️ Назад", "menu:subscription");
+
 export const backToMainKeyboard = (): InlineKeyboard => new InlineKeyboard().text("⬅️ Назад", "menu:main");
 
 /** Subscription screen: purchase for users without a subscription, paid features otherwise. */
 export const subscriptionKeyboard = (active: boolean, canRenew: boolean): InlineKeyboard => {
   const keyboard = new InlineKeyboard();
-  if (!active) return keyboard.text("💳 Купить подписку", "sub:buy").row().text("⬅️ Назад", "menu:main");
+  if (!active) return keyboard.text("💳 Купить подписку", "sub:buy").row().text("🛟 Поддержка", "support:open").row().text("⬅️ Назад", "menu:main");
   keyboard.text("🖼 Добавить свой логотип", "branding:open").row().text("🔄 Синхронизировать Max и TG", "sub:sync").row();
   if (canRenew) keyboard.text("💳 Продлить подписку", "sub:buy").row();
-  return keyboard.text("⬅️ Назад", "menu:main");
+  return keyboard.text("🛟 Поддержка", "support:open").row().text("⬅️ Назад", "menu:main");
 };
 
 export const profileKeyboard = (): InlineKeyboard => {

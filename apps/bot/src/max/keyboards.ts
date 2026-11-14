@@ -17,11 +17,12 @@ export const mainMenuKeyboard = (): MaxKeyboard => [
 ];
 
 export const subscriptionKeyboard = (active: boolean, canRenew: boolean): MaxKeyboard => {
-  if (!active) return [[{ text: "💳 Купить подписку", payload: "sub:buy" }], [{ text: "⬅️ Назад", payload: "menu:main" }]];
+  if (!active) return [[{ text: "💳 Купить подписку", payload: "sub:buy" }], [{ text: "🛟 Поддержка", payload: "support:open" }], [{ text: "⬅️ Назад", payload: "menu:main" }]];
   return [
     [{ text: "🖼 Добавить свой логотип", payload: "branding:open" }],
     [{ text: "🔄 Синхронизировать Max и TG", payload: "sub:sync" }],
     ...(canRenew ? [[{ text: "💳 Продлить подписку", payload: "sub:buy" }]] : []),
+    [{ text: "🛟 Поддержка", payload: "support:open" }],
     [{ text: "⬅️ Назад", payload: "menu:main" }]
   ];
 };

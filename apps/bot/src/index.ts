@@ -10,6 +10,7 @@ import { createMaxClient, ensureMaxWebhook, registerMaxWebhook } from "./max/web
 import { WIDGET_ALLOWED_UPDATES } from "./services/telegramWidgetApi";
 import { startBrandingCleanup } from "./services/brandingStorage";
 import { startSubscriptionReminderScheduler } from "./services/subscriptionService";
+import { initSupport } from "./services/supportService";
 
 const sleep = async (ms: number): Promise<void> => {
   await new Promise((resolve) => setTimeout(resolve, ms));
@@ -35,6 +36,7 @@ const ensureWebhook = async (bot: Bot<BotContext>): Promise<void> => {
 const start = async (): Promise<void> => {
   await startBrandingCleanup();
   const bot = createBot();
+  initSupport(bot);
   const maxClient = config.maxEnabled ? createMaxClient() : null;
   startDailyStatsScheduler(bot);
   startSubscriptionReminderScheduler(bot, maxClient);

@@ -1,4 +1,4 @@
-﻿import { InlineKeyboard, InputFile, type Bot } from "grammy";
+import { InlineKeyboard, InputFile, type Bot } from "grammy";
 import type { EntrepreneurProfile, PaymentMethod } from "@receipt-bot/db";
 import type { ExportRangeKey } from "@receipt-bot/shared";
 import { config } from "../config";
@@ -11,7 +11,7 @@ import { getActiveService, getProfileByUserId, listActiveServices, softDeleteSer
 import { buildProfileTimeZoneLines, buildRegistrationCompleteText, buildTimeZonePickerText, parseTimeZoneCallback } from "../services/timeZoneService";
 import type { BotContext } from "../types";
 import { buildServicesListText } from "../utils/formatters";
-import { clearReceiptDraft } from "../utils/state";
+import { clearReceiptDraft, clearSupportInput } from "../utils/state";
 import { sendMenu } from "../utils/telegram";
 import { canUseSubscription } from "../services/subscriptionService";
 
@@ -24,6 +24,7 @@ const showProfile = async (ctx: BotContext, profile: EntrepreneurProfile) => sen
 
 export const registerCallbackHandlers = (bot: Bot<BotContext>): void => { bot.on("callback_query:data", async ctx => {
   const data = ctx.callbackQuery.data; await ctx.answerCallbackQuery().catch(() => undefined);
+  clearSupportInput(ctx.session);
   if (data === "menu:main") { clearReceiptDraft(ctx.session); return void await sendMenu(ctx, "Главное меню", mainMenuKeyboard(canUseSubscription(ctx))); }
   const e = await ensure(ctx); if (!e) return; const { user, profile } = e;
   if (data === "menu:profile") return void await showProfile(ctx, profile);

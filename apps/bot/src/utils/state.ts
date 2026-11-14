@@ -11,6 +11,11 @@ export const clearBrandingDraft = (session: BotSession): void => {
   if (session.awaitingInput?.startsWith("branding_")) session.awaitingInput = null;
 };
 
+/** Leaving the support screen (any button or command) cancels the pending support message. */
+export const clearSupportInput = (session: BotSession): void => {
+  if (session.awaitingInput === "support_message") session.awaitingInput = null;
+};
+
 export const clearReceiptDraft = (session: BotSession): void => {
   session.receiptDraft = null;
   if (session.awaitingInput === "receipt_custom_service" || session.awaitingInput === "receipt_price" || session.awaitingInput === "receipt_quantity") {

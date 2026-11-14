@@ -8,12 +8,12 @@ import { buildOperationsSummary, buildReceiptPreviewText, createOperationWithSna
 import { createService, getActiveService, getProfileByUserId, listActiveServices, softDeleteService, updateProfileField, updateProfileTimeZone, upsertMaxUser, upsertProfile } from "../services/userService";
 import { buildProfileTimeZoneLines, buildRegistrationCompleteText, buildRegistrationTimeZoneText, buildTimeZonePickerText, parseTimeZoneCallback } from "../services/timeZoneService";
 import { renderReceipt } from "../services/rendererClient";
-import { clearBrandingDraft, clearRegistrationDraft, clearReceiptDraft } from "../utils/state";
+import { clearBrandingDraft, clearRegistrationDraft, clearReceiptDraft, clearSupportInput } from "../utils/state";
 import { buildServicesListText } from "../utils/formatters";
 import { parseAmountInput, parseQuantityInput, validateInn, validateOgrn, validateRequiredText, validateServiceTitle } from "../utils/validation";
 import { deleteOperationConfirmKeyboard, deleteServiceConfirmKeyboard, mainMenuKeyboard, operationsKeyboard, paymentMethodKeyboard, profileKeyboard, receiptPreviewKeyboard, registrationTimeZoneKeyboard, serviceSelectionKeyboard, servicesKeyboard, timeZoneSelectKeyboard } from "./keyboards";
 import { cleanupBrandingDraftChange, retainBrandingLogo } from "../services/brandingStorage";
-import { handleMaxBrandingInput, handleMaxSubscriptionCallback } from "./subscription";
+import { handleMaxBrandingInput, handleMaxSubscriptionCallback, handleMaxSupportInput } from "./subscription";
 import type { MaxApiClient } from "./client";
 import { createMaxContext } from "./context";
 import type { MaxBotContext, MaxUpdate } from "./types";
@@ -38,12 +38,14 @@ export const handleMaxUpdate = async (client: MaxApiClient, update: MaxUpdate) =
   try {
     if (update.update_type === "message_callback" && update.callback?.payload && !update.callback.payload.startsWith("branding:")) clearBrandingDraft(ctx.session);
     if (update.update_type === "bot_started") {
+      clearSupportInput(ctx.session);
       const e = await ensure(ctx);
       if (e) await ctx.sendMenu("Главное меню", mainMenuKeyboard());
     } else if (update.update_type === "message_created") {
       const body = update.message?.body;
-      if (!await handleMaxBrandingInput(ctx, body?.text?.trim() ?? "", body?.attachments ?? undefined)) await text(ctx, body?.text?.trim() ?? "");
+      if (!await handleMaxSupportInput(ctx, body?.text?.trim() ?? "") && !await handleMaxBrandingInput(ctx, body?.text?.trim() ?? "", body?.attachments ?? undefined)) await text(ctx, body?.text?.trim() ?? "");
     } else if (update.update_type === "message_callback" && update.callback?.payload) {
+      if (update.callback.payload !== "support:open") clearSupportInput(ctx.session);
       if (update.callback.payload === "menu:export") {
         const e = await ensure(ctx);
         if (e) await sendExport(ctx, e.user.id, e.profile.timeZone);

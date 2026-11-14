@@ -6,7 +6,8 @@ import { getProfileByUserId, upsertMaxUser } from "../services/userService";
 import { releaseUnusedBrandingLogo } from "../services/brandingStorage";
 import { clearBrandingDraft } from "../utils/state";
 import { logger } from "../services/logger";
-import { backToSubscriptionKeyboard, brandingKeyboard, subscriptionKeyboard } from "./keyboards";
+import { SUPPORT_FAILED, SUPPORT_PROMPT, SUPPORT_THANKS, sendSupportMessage, validateSupportText } from "../services/supportService";
+import { backToSubscriptionKeyboard, brandingKeyboard, mainMenuKeyboard, subscriptionKeyboard } from "./keyboards";
 import type { MaxBotContext } from "./types";
 
 // MAX counterpart of handlers/subscription.ts and handlers/branding.ts (same rules, MAX user id).
@@ -18,7 +19,7 @@ class SubscriptionRequiredError extends Error {
   constructor() { super("Брендированная квитанция доступна по подписке. Откройте «Моя подписка»."); }
 }
 
-export const MAX_SUBSCRIPTION_PAYLOADS = /^(menu:subscription|sub:(buy|sync))$/;
+export const MAX_SUBSCRIPTION_PAYLOADS = /^(menu:subscription|sub:(buy|sync)|support:open)$/;
 
 const showSubscription = async (ctx: MaxBotContext, user: User, timeZone: string, message?: string): Promise<void> => {
   await ctx.sendMenu([message, buildSubscriptionText(user, timeZone)].filter(Boolean).join("\n\n"),
@@ -40,6 +41,11 @@ const requireSubscribed = (user: User): void => {
 export const handleMaxSubscriptionCallback = async (ctx: MaxBotContext, data: string, user: User, profile: EntrepreneurProfile): Promise<boolean> => {
   if (MAX_SUBSCRIPTION_PAYLOADS.test(data)) {
     if (!isBrandingAvailable(user.maxId)) { await ctx.reply("Подписка пока недоступна."); return true; }
+    if (data === "support:open") {
+      ctx.session.awaitingInput = "support_message";
+      await ctx.sendMenu(SUPPORT_PROMPT, backToSubscriptionKeyboard());
+      return true;
+    }
     if (data === "sub:sync") {
       // Placeholder: Max/Telegram synchronisation is not implemented yet.
       await ctx.reply(hasActiveSubscription(user.subscriptionUntil) ? "Функция пока недоступна." : "Функция доступна по подписке.");
@@ -102,6 +108,24 @@ export const handleMaxSubscriptionCallback = async (ctx: MaxBotContext, data: st
     logger.warn({ userId: ctx.user.id, errorName: error instanceof Error ? error.name : "Error" }, "MAX branding action failed");
     await ctx.sendMenu("Не удалось выполнить действие. Попробуйте снова или откройте оформление заново.", backToSubscriptionKeyboard());
   }
+  return true;
+};
+
+/** While the support screen waits for a message, forwards the text to the admin. Returns false otherwise. */
+export const handleMaxSupportInput = async (ctx: MaxBotContext, value: string): Promise<boolean> => {
+  if (ctx.session.awaitingInput !== "support_message") return false;
+  const invalid = validateSupportText(value);
+  if (invalid) { await ctx.reply(invalid); return true; }
+  try {
+    const user = await maxUser(ctx);
+    await sendSupportMessage(user.id, "MAX", value);
+  } catch (error) {
+    logger.error({ err: error, userId: ctx.user.id }, "MAX support message delivery failed");
+    await ctx.reply(SUPPORT_FAILED);
+    return true;
+  }
+  ctx.session.awaitingInput = null;
+  await ctx.sendMenu(`${SUPPORT_THANKS}\n\nГлавное меню`, mainMenuKeyboard());
   return true;
 };
 

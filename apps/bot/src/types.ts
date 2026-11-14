@@ -8,6 +8,7 @@ export type AwaitingInput =
   | "branding_logo"
   | "branding_name"
   | "branding_subtitle"
+  | "support_message"
   | "registration_inn"
   | "registration_full_name"
   | "registration_address"
