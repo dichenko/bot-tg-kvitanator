@@ -8,7 +8,6 @@ export type AwaitingInput =
   | "registration_full_name"
   | "registration_address"
   | "registration_ogrn"
-  | "registration_time_zone"
   | "profile_edit_inn"
   | "profile_edit_full_name"
   | "profile_edit_address"

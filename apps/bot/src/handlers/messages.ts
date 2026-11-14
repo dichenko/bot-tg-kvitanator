@@ -1,6 +1,5 @@
 import type { Bot } from "grammy";
-import { mainMenuKeyboard, receiptPreviewKeyboard, registrationTimeZoneKeyboard, servicesKeyboard } from "../keyboards";
-import { buildRegistrationTimeZoneText } from "../services/timeZoneService";
+import { mainMenuKeyboard, receiptPreviewKeyboard, servicesKeyboard } from "../keyboards";
 import { buildReceiptPreviewText } from "../services/operationService";
 import { createService, getProfileByUserId, listActiveServices, updateProfileField, upsertProfile, upsertTelegramUser } from "../services/userService";
 import type { BotContext } from "../types";
@@ -15,8 +14,7 @@ export const registerMessageHandlers = (bot: Bot<BotContext>): void => { bot.on(
     if (ctx.session.awaitingInput === "registration_inn") { const r = validateInn(text); if (!r.valid || !r.normalized) throw new Error(r.message); ctx.session.registrationDraft.inn = r.normalized; ctx.session.awaitingInput = "registration_full_name"; return void await ctx.reply("Введите ФИО ИП:"); }
     if (ctx.session.awaitingInput === "registration_full_name") { ctx.session.registrationDraft.ipFullName = validateRequiredText(text, "ФИО ИП"); ctx.session.awaitingInput = "registration_address"; return void await ctx.reply("Введите адрес оказания услуги:"); }
     if (ctx.session.awaitingInput === "registration_address") { const user = await upsertTelegramUser(ctx.from!); await upsertProfile(user.id, { inn: ctx.session.registrationDraft.inn ?? "", ipFullName: ctx.session.registrationDraft.ipFullName ?? "", address: validateRequiredText(text, "Адрес"), ogrn: "" }); clearRegistrationDraft(ctx.session); ctx.session.awaitingInput = "registration_ogrn"; return void await ctx.reply("Введите ОГРН (необязательно) или отправьте «-», чтобы пропустить:"); }
-    if (ctx.session.awaitingInput === "registration_ogrn") { const user = await upsertTelegramUser(ctx.from!); await updateProfileField(user.id, "ogrn", validateOgrn(text === "-" ? "" : text) || null as any); clearRegistrationDraft(ctx.session); ctx.session.awaitingInput = "registration_time_zone"; return void await ctx.reply(buildRegistrationTimeZoneText(), { reply_markup: registrationTimeZoneKeyboard() }); }
-    if (ctx.session.awaitingInput === "registration_time_zone") return void await ctx.reply("Выберите часовой пояс кнопками ниже.", { reply_markup: registrationTimeZoneKeyboard() });
+    if (ctx.session.awaitingInput === "registration_ogrn") { const user = await upsertTelegramUser(ctx.from!); await updateProfileField(user.id, "ogrn", validateOgrn(text === "-" ? "" : text) || null as any); clearRegistrationDraft(ctx.session); ctx.session.awaitingInput = null; return void await sendMenu(ctx, "Данные ИП сохранены. Главное меню:", mainMenuKeyboard()); }
     if (ctx.session.awaitingInput === "profile_edit_inn") return void await profileField(ctx, "inn", text);
     if (ctx.session.awaitingInput === "profile_edit_full_name") return void await profileField(ctx, "ipFullName", text);
     if (ctx.session.awaitingInput === "profile_edit_address") return void await profileField(ctx, "address", text);

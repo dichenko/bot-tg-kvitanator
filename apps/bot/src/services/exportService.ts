@@ -5,15 +5,14 @@ import { OperationStatus, prisma } from "@receipt-bot/db";
 import type { Operation } from "@receipt-bot/db";
 import type { ExportRangeKey } from "@receipt-bot/shared";
 import { DateTime } from "luxon";
-import { CALCULATION_TYPE_LABELS, formatDateTimeInZone, resolveTimeZone } from "@receipt-bot/shared";
+import { CALCULATION_TYPE_LABELS } from "@receipt-bot/shared";
 import { formatAmount, formatPaymentMethod, formatOperationStatus } from "../utils/formatters";
 
-/** Period boundaries ("today", months) are computed in the profile's current time zone. */
 const buildRange = (
   key: ExportRangeKey,
-  profileTimeZone: string
+  timeZone: string
 ): { from?: Date; to?: Date } => {
-  const now = DateTime.now().setZone(resolveTimeZone(profileTimeZone));
+  const now = DateTime.now().setZone(timeZone);
 
   if (key === "all_time") {
     return {};
@@ -70,7 +69,7 @@ export const getOperationsForExport = async (
 
 export const buildExportFile = async (
   operations: Operation[],
-  options: { userId: number; rangeKey: ExportRangeKey; exportsDir: string }
+  options: { userId: number; rangeKey: ExportRangeKey; exportsDir: string; timeZone: string }
 ): Promise<{ filePath: string; fileName: string }> => {
   await fs.mkdir(options.exportsDir, { recursive: true });
 
@@ -92,7 +91,7 @@ export const buildExportFile = async (
 
   operations.forEach((operation) => {
     worksheet.addRow({
-      date: formatDateTimeInZone(operation.createdAt, operation.timeZoneSnapshot),
+      date: DateTime.fromJSDate(operation.createdAt).setZone(options.timeZone).toFormat("dd.LL.yyyy HH:mm"),
       receiptNumber: operation.receiptNumber,
       inn: operation.innSnapshot,
       fullName: operation.ipFullNameSnapshot,

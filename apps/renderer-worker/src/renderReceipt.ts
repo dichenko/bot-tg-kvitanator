@@ -48,7 +48,7 @@ export const renderReceiptImage = async (
   const html = template({
     title: "КВИТАНЦИЯ",
     receiptNumber: payload.receiptNumber,
-    createdAt: DateTime.fromISO(payload.createdAt, { zone: "utc" }).setZone(payload.timeZone ?? options.timeZone).toFormat("dd.LL.yyyy HH:mm"),
+    createdAt: DateTime.fromISO(payload.createdAt).setZone(options.timeZone).toFormat("dd.LL.yyyy HH:mm"),
     inn: payload.inn,
     ogrn: payload.ogrn,
     ipFullName: payload.ipFullName,
