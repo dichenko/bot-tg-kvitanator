@@ -22,6 +22,7 @@ export const upsertTelegramUser = async (telegramUser: TelegramUserInput): Promi
     },
     create: {
       telegramId: BigInt(telegramUser.id),
+      registrationChannel: "TELEGRAM",
       username: telegramUser.username ?? null,
       firstName: telegramUser.first_name ?? null,
       lastName: telegramUser.last_name ?? null
@@ -40,6 +41,7 @@ export const upsertMaxUser = async (maxUser: MaxUserInput): Promise<User> =>
     },
     create: {
       maxId: BigInt(maxUser.id),
+      registrationChannel: "MAX",
       username: maxUser.username ?? null,
       firstName: maxUser.firstName ?? null,
       lastName: maxUser.lastName ?? null

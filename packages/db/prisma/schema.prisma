@@ -23,6 +23,12 @@ enum OperationStatus {
   DELETED
 }
 
+enum StatisticsChannel {
+  TELEGRAM
+  MAX
+  UNKNOWN
+}
+
 enum RenderJobStatus {
   PENDING
   PROCESSING
@@ -39,10 +45,12 @@ model User {
   lastName    String?              @db.VarChar(128)
   createdAt   DateTime             @default(now())
   updatedAt   DateTime             @updatedAt
+  registrationChannel StatisticsChannel @default(UNKNOWN)
   profile     EntrepreneurProfile?
   services    Service[]
   operations  Operation[]
 
+  @@index([createdAt])
   @@map("users")
 }
 
@@ -104,6 +112,7 @@ model Operation {
   paymentMethod        PaymentMethod
   calculationType      ReceiptCalculationType @default(INCOME)
   status               OperationStatus    @default(DRAFT)
+  channel              StatisticsChannel  @default(UNKNOWN)
   imagePath            String?            @db.VarChar(500)
   errorMessage         String?            @db.VarChar(1000)
   renderedAt           DateTime?
@@ -119,6 +128,26 @@ model Operation {
   @@index([userId, createdAt])
   @@unique([userId, receiptNumber])
   @@map("operations")
+}
+
+// Immutable aggregates keep old reports stable even after receipt deletion.
+// deliveryKey is unique only for scheduled reports (manual reports use NULL).
+model StatisticsReport {
+  id          String   @id @default(cuid())
+  deliveryKey String?  @unique @db.VarChar(160)
+  recipientId BigInt
+  cutoffAt    DateTime
+  timezone    String   @db.VarChar(100)
+  snapshot    Json?
+  state       String   @default("PREPARING") @db.VarChar(20)
+  leaseUntil  DateTime
+  messageId   Int?
+  revision    Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([recipientId, messageId])
+  @@map("statistics_reports")
 }
 
 model OperationItem {

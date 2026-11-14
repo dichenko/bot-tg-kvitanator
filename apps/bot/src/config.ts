@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { IANAZone } from "luxon";
 
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
@@ -18,7 +19,7 @@ const envSchema = z.object({
   RENDERER_URL: z.string().url(),
   RECEIPTS_DIR: z.string().min(1),
   EXPORTS_DIR: z.string().min(1),
-  APP_TIMEZONE: z.string().default("Europe/Moscow"),
+  APP_TIMEZONE: z.string().refine(value => IANAZone.isValidZone(value), "Invalid IANA timezone").default("Europe/Moscow"),
   DAILY_STATS_TELEGRAM_ID: z.coerce.number().int().positive().default(19422781),
   DAILY_STATS_HOUR: z.coerce.number().int().min(0).max(23).default(7)
 }).superRefine((value, ctx) => {

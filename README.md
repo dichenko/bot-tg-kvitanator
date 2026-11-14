@@ -195,6 +195,9 @@ Existing Telegram users are preserved by an additive database migration. New MAX
 
 ## Main test flows
 
+Administrative interactive statistics (`/stats`, daily schedule, migration and
+isolated tests): [docs/interactive-statistics.md](docs/interactive-statistics.md).
+
 1. Start the bot with `/start`.
 2. Complete entrepreneur profile registration.
 3. Add a service.

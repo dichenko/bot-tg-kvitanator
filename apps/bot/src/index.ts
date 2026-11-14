@@ -7,6 +7,7 @@ import { startDailyStatsScheduler } from "./services/dailyStatsService";
 import { logger } from "./services/logger";
 import type { BotContext } from "./types";
 import { createMaxClient, ensureMaxWebhook, registerMaxWebhook } from "./max/webhook";
+import { WIDGET_ALLOWED_UPDATES } from "./services/telegramWidgetApi";
 
 const sleep = async (ms: number): Promise<void> => {
   await new Promise((resolve) => setTimeout(resolve, ms));
@@ -18,7 +19,7 @@ const ensureWebhook = async (bot: Bot<BotContext>): Promise<void> => {
   while (true) {
     try {
       attempt += 1;
-      await bot.api.setWebhook(config.webhookUrl);
+      await bot.api.setWebhook(config.webhookUrl, { allowed_updates: WIDGET_ALLOWED_UPDATES });
       logger.info({ webhookUrl: config.webhookUrl, attempt }, "Webhook configured");
       return;
     } catch (error) {
@@ -37,6 +38,7 @@ const start = async (): Promise<void> => {
   if (config.botMode === "polling") {
     void bot
       .start({
+        allowed_updates: WIDGET_ALLOWED_UPDATES,
         onStart: async () => {
           logger.info("Bot started in polling mode");
         }
