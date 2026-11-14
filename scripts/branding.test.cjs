@@ -17,6 +17,7 @@ const { prisma, Prisma } = require("../packages/db/dist");
 const { config } = require("../apps/bot/dist/config");
 const shared = require("../packages/shared/dist");
 const service = require("../apps/bot/dist/services/brandingService");
+const storage = require("../apps/bot/dist/services/brandingStorage");
 const operations = require("../apps/bot/dist/services/operationService");
 const rendererClient = require("../apps/bot/dist/services/rendererClient");
 const renderer = require("../apps/renderer-worker/dist/renderReceipt");
@@ -25,6 +26,7 @@ const { createInitialSession } = require("../apps/bot/dist/utils/state");
 const { registerBrandingHandlers } = require("../apps/bot/dist/handlers/branding");
 const { registerCallbackHandlers } = require("../apps/bot/dist/handlers/callbacks");
 const { registerMessageHandlers } = require("../apps/bot/dist/handlers/messages");
+const { registerCommandHandlers } = require("../apps/bot/dist/handlers/commands");
 const { chromium } = require("../apps/renderer-worker/node_modules/playwright");
 const { PGlite } = require("@electric-sql/pglite");
 require("../apps/bot/dist/services/logger").logger.level = "silent";
@@ -33,15 +35,17 @@ const user = { id: 7, telegramId: BigInt(admin) };
 const profile = { id: 1, userId: 7, inn: "123456789012", ipFullName: "Иванов Иван Иванович", address: "Москва, ул. Примерная, 1", ogrn: null, timeZone: "Europe/Moscow", receiptBranding: null };
 const payload = { operationId: 7, receiptNumber: "KV-000007", createdAt: "2026-11-14T12:00:00Z", timeZone: "Europe/Moscow", inn: profile.inn, ipFullName: profile.ipFullName, address: profile.address, calculationType: "INCOME", items: [{ title: "Услуга", quantity: "1", price: "1000", amount: "1000" }], amount: "1000", paymentMethod: "CASH" };
 let browser, browserChannel, square, wide, logoFileName;
+const originalQueryRaw = prisma.$queryRaw;
 before(async () => {
   await fs.mkdir(dir, { recursive: true });
   square = await sharp({ create: { width: 512, height: 512, channels: 4, background: { r: 37, g: 99, b: 235, alpha: 0.5 } } }).png().toBuffer();
   wide = await sharp({ create: { width: 800, height: 300, channels: 3, background: "#18794e" } }).jpeg().toBuffer();
   logoFileName = await service.storeLogo(square, dir);
+  prisma.$queryRaw = async () => [{ logoFileName }];
   try { browser = await chromium.launch({ headless: true }); }
   catch (error) { if (process.platform !== "win32") throw error; browserChannel = "msedge"; browser = await chromium.launch({ headless: true, channel: browserChannel }); }
 });
-after(async () => { await browser?.close(); await prisma.$disconnect(); });
+after(async () => { prisma.$queryRaw = originalQueryRaw; await browser?.close(); await prisma.$disconnect(); });
 
 async function withMocks(mocks, fn) {
   const restore = mocks.map(([object, key, replacement]) => { const original = object[key]; object[key] = replacement; return () => { object[key] = original; }; });
@@ -108,11 +112,12 @@ function harness(id = admin, chatType = "private", initial = createInitialSessio
     return { ok: true, result: { message_id: ++sequence, date: 0, chat, text: params.text } };
   });
   bot.use(session({ initial: () => data }));
+  registerCommandHandlers(bot);
   registerBrandingHandlers(bot); registerMessageHandlers(bot); registerCallbackHandlers(bot);
   const message = extra => ({ message_id: ++sequence, date: 0, from, chat, ...extra });
   return { calls, data,
     callback: text => bot.handleUpdate({ update_id: ++sequence, callback_query: { id: String(sequence), from, chat_instance: "1", data: text, message: message({ text: "Menu" }) } }),
-    text: text => bot.handleUpdate({ update_id: ++sequence, message: message({ text }) }),
+    text: text => bot.handleUpdate({ update_id: ++sequence, message: message({ text, ...(text.startsWith("/") ? { entities: [{ type: "bot_command", offset: 0, length: text.split(" ")[0].length }] } : {}) }) }),
     photo: extra => bot.handleUpdate({ update_id: ++sequence, message: message(extra ?? { photo: [{ file_id: "logo", file_unique_id: "logo", width: 512, height: 512, file_size: square.length }] }) })
   };
 }
@@ -145,6 +150,7 @@ test("editing uploads photo/document, validates text, saves only on confirmation
   await withMocks([
     [prisma.user, "upsert", async () => user], [prisma.user, "findUniqueOrThrow", async () => user],
     [prisma.entrepreneurProfile, "findUnique", async () => ({ ...profile, receiptBranding: saved })],
+    [prisma.entrepreneurProfile, "findUniqueOrThrow", async () => ({ ...profile, receiptBranding: saved })],
     [prisma.entrepreneurProfile, "update", async ({ data }) => { writes++; saved = data.receiptBranding === Prisma.DbNull ? null : data.receiptBranding; return profile; }],
     [global, "fetch", async () => new Response(square)]
   ], async () => {
@@ -187,10 +193,63 @@ test("cancelling while a logo downloads prevents a late upload from restoring th
     [prisma.user, "upsert", async () => user], [prisma.entrepreneurProfile, "findUnique", async () => profile],
     [global, "fetch", async () => { started(); return response; }]
   ], async () => {
+    const before = new Set(await fs.readdir(path.join(dir, "branding")));
     const upload = h.photo(); await downloading;
     await h.callback("branding:cancel"); finish(new Response(square)); await upload;
     assert.equal(h.data.brandingDraft, undefined); assert.equal(h.data.awaitingInput, null);
     assert(!h.calls.some(c => c.params.text?.includes("Логотип загружен")));
+    assert.deepEqual(new Set(await fs.readdir(path.join(dir, "branding"))), before);
+  });
+});
+
+test("replacing, cancelling, resetting and leaving a draft immediately deletes unused uploads", async () => {
+  await withMocks([
+    [prisma.user, "upsert", async () => user], [prisma.entrepreneurProfile, "findUnique", async () => profile],
+    [global, "fetch", async () => new Response(square)]
+  ], async () => {
+    const h = harness();
+    const upload = async () => { await h.callback("branding:logo"); await h.photo(); return h.data.brandingDraft.logoFileName; };
+    const exists = name => fs.access(path.join(dir, "branding", name));
+    await h.callback("branding:open");
+    const first = await upload(), second = await upload();
+    await assert.rejects(exists(first)); await exists(second);
+    await h.callback("branding:cancel"); await assert.rejects(exists(second));
+    for (const action of ["branding:reset", "branding:open", "menu:profile", "/start"]) {
+      await h.callback("branding:open"); const name = await upload();
+      if (action === "/start") await h.text(action); else await h.callback(action);
+      await assert.rejects(exists(name), `draft file survives ${action}`);
+    }
+  });
+});
+
+test("cleanup keeps selected and historical logos and active drafts; deletes abandoned files after lease expiry", async () => {
+  const receiptsDir = await fs.mkdtemp(path.join(dir, "cleanup-"));
+  const selected = await service.storeLogo(square, receiptsDir);
+  const historical = await service.storeLogo(square, receiptsDir);
+  const orphan = await service.storeLogo(square, receiptsDir);
+  const active = await service.storeLogo(square, receiptsDir);
+  const foreign = path.join(receiptsDir, "branding", "notes.txt"); await fs.writeFile(foreign, "keep");
+  const read = name => fs.access(path.join(receiptsDir, "branding", name));
+  await withMocks([[prisma, "$queryRaw", async () => [{ logoFileName: selected }, { logoFileName: historical }]]], async () => {
+    assert.equal((await storage.cleanupUnusedBrandingLogos({ receiptsDir, minAgeMs: 0 })).removed, 0);
+    const future = Date.now() + 31 * 60_000;
+    await withMocks([[Date, "now", () => future]], async () => {
+      storage.retainBrandingLogo(active);
+      const result = await storage.cleanupUnusedBrandingLogos({ receiptsDir, minAgeMs: 0 });
+      assert.equal(result.removed, 1); await assert.rejects(read(orphan));
+      await read(selected); await read(historical); await read(active); await fs.access(foreign);
+    });
+    const result = await storage.cleanupUnusedBrandingLogos({ receiptsDir, minAgeMs: 0, now: future + 31 * 60_000 });
+    assert.equal(result.removed, 1); await assert.rejects(read(active)); await read(selected); await read(historical);
+  });
+});
+
+test("cleanup fails closed when database references cannot be read", async () => {
+  const receiptsDir = await fs.mkdtemp(path.join(dir, "failed-cleanup-"));
+  const name = await service.storeLogo(square, receiptsDir);
+  await withMocks([[prisma, "$queryRaw", async () => { throw new Error("database unavailable"); }]], async () => {
+    await assert.rejects(storage.cleanupUnusedBrandingLogos({ receiptsDir, minAgeMs: 0, now: Date.now() + 60 * 60_000 }), /database unavailable/);
+    await fs.access(path.join(receiptsDir, "branding", name));
   });
 });
 
@@ -287,5 +346,14 @@ test("additive migration retains old records, persists branding JSON and keeps o
     await db.query('UPDATE operations SET "brandingSnapshot"=$1', [JSON.stringify(branding)]);
     await db.query('UPDATE entrepreneur_profiles SET "receiptBranding"=NULL');
     assert.deepEqual((await db.query('SELECT "brandingSnapshot" FROM operations')).rows[0].brandingSnapshot, branding);
+    const receiptsDir = await fs.mkdtemp(path.join(dir, "database-cleanup-"));
+    await fs.mkdir(path.join(receiptsDir, "branding"));
+    await fs.copyFile(path.join(dir, "branding", logoFileName), path.join(receiptsDir, "branding", logoFileName));
+    const unused = await service.storeLogo(square, receiptsDir);
+    await withMocks([[prisma, "$queryRaw", async strings => (await db.query(strings.join(""))).rows]], async () => {
+      assert.equal((await storage.cleanupUnusedBrandingLogos({ receiptsDir, minAgeMs: 0, now: Date.now() + 60 * 60_000 })).removed, 1);
+      await fs.access(path.join(receiptsDir, "branding", logoFileName));
+      await assert.rejects(fs.access(path.join(receiptsDir, "branding", unused)));
+    });
   } finally { await db.close(); }
 });

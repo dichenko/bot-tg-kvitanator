@@ -6,6 +6,7 @@ import { prisma, Prisma, type EntrepreneurProfile } from "@receipt-bot/db";
 import { BRANDING_NAME_LIMIT, BRANDING_SUBTITLE_LIMIT, parseReceiptBranding, type ReceiptBranding } from "@receipt-bot/shared";
 import { config } from "../config";
 import { renderReceipt } from "./rendererClient";
+import { markLogoSaved, protectReplacedLogo, registerTemporaryLogo } from "./brandingStorage";
 
 export const MAX_LOGO_BYTES = 5 * 1024 * 1024;
 export const isBrandingTestUser = (telegramId: number | bigint | undefined | null): boolean =>
@@ -94,6 +95,7 @@ export const storeLogo = async (input: Buffer, receiptsDir = config.receiptsDir)
   await fs.mkdir(dir, { recursive: true });
   const name = `${randomUUID()}.png`;
   await fs.writeFile(path.join(dir, name), normalized, { flag: "wx" });
+  registerTemporaryLogo(name);
   return name;
 };
 
@@ -102,7 +104,10 @@ export const saveReceiptBranding = async (userId: number, branding: ReceiptBrand
   if (!isBrandingTestUser(user.telegramId)) throw new Error("Тестовое оформление недоступно.");
   const value = parseReceiptBranding(branding);
   if (branding && !value && (branding.logoFileName || branding.name || branding.subtitle)) throw new Error("Некорректное оформление.");
+  const previous = await prisma.entrepreneurProfile.findUniqueOrThrow({ where: { userId }, select: { receiptBranding: true } });
+  await protectReplacedLogo(parseReceiptBranding(previous.receiptBranding)?.logoFileName);
   await prisma.entrepreneurProfile.update({ where: { userId }, data: { receiptBranding: value ? { ...value } : Prisma.DbNull } });
+  markLogoSaved(value?.logoFileName);
 };
 
 export const renderBrandingPreview = async (userId: number, profile: EntrepreneurProfile, branding: ReceiptBranding | null): Promise<string> => {

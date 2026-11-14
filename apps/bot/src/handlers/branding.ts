@@ -7,6 +7,7 @@ import { canConfigureBranding, downloadTelegramLogo, MAX_LOGO_BYTES, removeBrand
 import { clearBrandingDraft } from "../utils/state";
 import { sendMenu } from "../utils/telegram";
 import { logger } from "../services/logger";
+import { cleanupBrandingDraftChange, releaseUnusedBrandingLogo, retainBrandingLogo } from "../services/brandingStorage";
 
 const keyboard = () => new InlineKeyboard()
   .text("🖼 Загрузить логотип", "branding:logo").row()
@@ -33,8 +34,14 @@ const profileFor = async (ctx: BotContext): Promise<{ userId: number; profile: E
 export const registerBrandingHandlers = (bot: Bot<BotContext>): void => {
   // Leaving this editor discards the draft, including via an old menu button.
   bot.use(async (ctx, next) => {
-    if (ctx.callbackQuery?.data && !ctx.callbackQuery.data.startsWith("branding:")) clearBrandingDraft(ctx.session);
-    await next();
+    const previous = ctx.session.brandingDraft?.logoFileName;
+    retainBrandingLogo(previous);
+    try {
+      if (ctx.callbackQuery?.data && !ctx.callbackQuery.data.startsWith("branding:")) clearBrandingDraft(ctx.session);
+      await next();
+    } finally {
+      await cleanupBrandingDraftChange(previous, ctx.session).catch(error => logger.warn({ err: error }, "Draft logo cleanup failed"));
+    }
   });
 
   bot.callbackQuery(/^branding:/, async ctx => {
@@ -105,7 +112,10 @@ export const registerBrandingHandlers = (bot: Bot<BotContext>): void => {
       if (!info.file_path) throw new Error("Файл недоступен. Отправьте его ещё раз.");
       const logoFileName = await storeLogo(await downloadTelegramLogo(info.file_path));
       // A late download must not restore a draft after cancellation or navigation.
-      if (ctx.session.awaitingInput !== "branding_logo" || ctx.session.brandingDraft !== expectedDraft) return;
+      if (ctx.session.awaitingInput !== "branding_logo" || ctx.session.brandingDraft !== expectedDraft) {
+        await releaseUnusedBrandingLogo(logoFileName);
+        return;
+      }
       ctx.session.brandingDraft = { ...draft(ctx), logoFileName };
       ctx.session.awaitingInput = null;
       await show(ctx, "Логотип загружен. Можно добавить название и подпись или сразу посмотреть образец.");
