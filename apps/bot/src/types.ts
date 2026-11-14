@@ -14,6 +14,7 @@ export type AwaitingInput =
   | "profile_edit_address"
   | "profile_edit_ogrn"
   | "service_add"
+  | "receipt_custom_service"
   | "receipt_price"
   | "receipt_quantity";
 
@@ -23,7 +24,7 @@ export interface RegistrationDraft {
   ogrn?: string;
 }
 
-export interface ReceiptDraftItem { serviceId: number; quantity: string; price?: string }
+export interface ReceiptDraftItem { serviceId?: number; title?: string; quantity: string; price?: string }
 
 export interface ReceiptDraft {
   items: ReceiptDraftItem[];

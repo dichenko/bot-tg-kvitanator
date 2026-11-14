@@ -45,8 +45,12 @@ export const servicesKeyboard = (): MaxKeyboard => [
   [{ text: "⬅️ Назад", payload: "menu:main" }]
 ];
 
-export const serviceSelectionKeyboard = (services: Service[], prefix: string, includeBack = true): MaxKeyboard => {
+export const serviceSelectionKeyboard = (services: Service[], prefix: string, includeBack = true, includeManual = false): MaxKeyboard => {
   const rows: MaxKeyboard = services.map((service) => [{ text: service.title, payload: `${prefix}:${service.id}` }]);
+
+  if (includeManual) {
+    rows.push([{ text: "✏️ Ввести вручную", payload: `${prefix}:manual` }]);
+  }
 
   if (includeBack) {
     rows.push([{ text: "⬅️ Назад", payload: "menu:main" }]);

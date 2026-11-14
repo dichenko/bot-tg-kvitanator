@@ -59,12 +59,16 @@ export const servicesKeyboard = (): InlineKeyboard =>
     .row()
     .text("⬅️ Назад", "menu:main");
 
-export const serviceSelectionKeyboard = (services: Service[], prefix: string, includeBack = true): InlineKeyboard => {
+export const serviceSelectionKeyboard = (services: Service[], prefix: string, includeBack = true, includeManual = false): InlineKeyboard => {
   const keyboard = new InlineKeyboard();
 
   services.forEach((service) => {
     keyboard.text(service.title, `${prefix}:${service.id}`).row();
   });
+
+  if (includeManual) {
+    keyboard.text("✏️ Ввести вручную", `${prefix}:manual`).row();
+  }
 
   if (includeBack) {
     keyboard.text("⬅️ Назад", "menu:main");
