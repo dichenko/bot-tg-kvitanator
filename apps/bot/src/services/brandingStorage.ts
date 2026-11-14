@@ -54,7 +54,9 @@ export const cleanupUnusedBrandingLogos = async (options: {
     if (path.dirname(target) !== dir) throw new Error("Invalid branding cleanup path");
     try {
       const stat = await fs.lstat(target);
-      if (!stat.isFile() || now - stat.mtimeMs < (options.minAgeMs ?? UNUSED_LOGO_GRACE_MS)) continue;
+      // Without a minimum age skip the mtime check: Windows file times can run a few ms ahead of Date.now().
+      const minAgeMs = options.minAgeMs ?? UNUSED_LOGO_GRACE_MS;
+      if (!stat.isFile() || (minAgeMs > 0 && now - stat.mtimeMs < minAgeMs)) continue;
       if ((leases.get(file.name) ?? 0) > now) continue;
       await fs.unlink(target);
       leases.delete(file.name);

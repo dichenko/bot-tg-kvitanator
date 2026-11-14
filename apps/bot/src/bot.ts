@@ -8,6 +8,7 @@ import { registerCallbackHandlers } from "./handlers/callbacks";
 import { createInitialSession } from "./utils/state";
 import { registerStatisticsHandlers } from "./handlers/statistics";
 import { registerBrandingHandlers } from "./handlers/branding";
+import { registerSubscriptionHandlers } from "./handlers/subscription";
 
 export const createBot = (): Bot<BotContext> => {
   const bot = new Bot<BotContext>(config.botToken);
@@ -17,6 +18,7 @@ export const createBot = (): Bot<BotContext> => {
 
   registerCommandHandlers(bot);
   registerBrandingHandlers(bot);
+  registerSubscriptionHandlers(bot);
   registerMessageHandlers(bot);
   registerCallbackHandlers(bot);
 

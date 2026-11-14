@@ -1,4 +1,4 @@
-import type { Bot } from "grammy";
+﻿import type { Bot } from "grammy";
 import { mainMenuKeyboard, receiptPreviewKeyboard, registrationTimeZoneKeyboard, servicesKeyboard } from "../keyboards";
 import { buildRegistrationTimeZoneText } from "../services/timeZoneService";
 import { buildReceiptPreviewText } from "../services/operationService";
@@ -6,9 +6,10 @@ import { createService, getProfileByUserId, listActiveServices, updateProfileFie
 import type { BotContext } from "../types";
 import { clearRegistrationDraft } from "../utils/state";
 import { sendMenu } from "../utils/telegram";
+import { canUseSubscription } from "../services/subscriptionService";
 import { parseAmountInput, parseQuantityInput, validateInn, validateOgrn, validateRequiredText, validateServiceTitle } from "../utils/validation";
 
-const profileField = async (ctx: BotContext, field: "inn" | "ipFullName" | "address" | "ogrn", text: string) => { const user = await upsertTelegramUser(ctx.from!); const value = field === "inn" ? (() => { const r = validateInn(text); if (!r.valid || !r.normalized) throw new Error(r.message); return r.normalized; })() : field === "ogrn" ? validateOgrn(text === "-" ? "" : text) : validateRequiredText(text, field === "ipFullName" ? "ФИО ИП" : "Адрес оказания услуги"); await updateProfileField(user.id, field, value || null as any); ctx.session.awaitingInput = null; await sendMenu(ctx, "Данные ИП обновлены.", mainMenuKeyboard()); };
+const profileField = async (ctx: BotContext, field: "inn" | "ipFullName" | "address" | "ogrn", text: string) => { const user = await upsertTelegramUser(ctx.from!); const value = field === "inn" ? (() => { const r = validateInn(text); if (!r.valid || !r.normalized) throw new Error(r.message); return r.normalized; })() : field === "ogrn" ? validateOgrn(text === "-" ? "" : text) : validateRequiredText(text, field === "ipFullName" ? "ФИО ИП" : "Адрес оказания услуги"); await updateProfileField(user.id, field, value || null as any); ctx.session.awaitingInput = null; await sendMenu(ctx, "Данные ИП обновлены.", mainMenuKeyboard(canUseSubscription(ctx))); };
 export const registerMessageHandlers = (bot: Bot<BotContext>): void => { bot.on("message:text", async ctx => {
   const text = ctx.message.text.trim(); if (!text) return;
   try {
@@ -24,6 +25,6 @@ export const registerMessageHandlers = (bot: Bot<BotContext>): void => { bot.on(
     if (ctx.session.awaitingInput === "service_add") { const user = await upsertTelegramUser(ctx.from!); const title = validateServiceTitle(text); await createService(user.id, title); ctx.session.awaitingInput = null; return void await sendMenu(ctx, `Услуга «${title}» добавлена.`, servicesKeyboard()); }
     if (ctx.session.awaitingInput === "receipt_custom_service") { const d = ctx.session.receiptDraft; if (!d) throw new Error("Сначала начните создание квитанции."); const title = validateServiceTitle(text); d.items.push({ title, quantity: "1" }); d.editingItemIndex = d.items.length - 1; ctx.session.awaitingInput = "receipt_price"; return void await ctx.reply("Введите цену за единицу:"); }
     if (ctx.session.awaitingInput === "receipt_price" || ctx.session.awaitingInput === "receipt_quantity") { const user = await upsertTelegramUser(ctx.from!); const d = ctx.session.receiptDraft; const index = d?.editingItemIndex ?? -1; if (!d || !d.items[index]) throw new Error("Сначала выберите услугу."); if (ctx.session.awaitingInput === "receipt_price") d.items[index].price = parseAmountInput(text); else d.items[index].quantity = parseQuantityInput(text); ctx.session.awaitingInput = null; const services = await listActiveServices(user.id); return void await sendMenu(ctx, buildReceiptPreviewText(services, d), receiptPreviewKeyboard(d.paymentMethod ?? "BANK_TRANSFER", d.calculationType ?? "INCOME"), { parse_mode: "HTML" }); }
-    await ctx.reply("Используйте кнопки меню ниже.", { reply_markup: mainMenuKeyboard() });
+    await ctx.reply("Используйте кнопки меню ниже.", { reply_markup: mainMenuKeyboard(canUseSubscription(ctx)) });
   } catch (e) { await ctx.reply(e instanceof Error ? e.message : "Не удалось сохранить данные."); }
 }); };

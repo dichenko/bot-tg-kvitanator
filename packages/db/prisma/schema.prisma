@@ -46,6 +46,11 @@ model User {
   createdAt   DateTime             @default(now())
   updatedAt   DateTime             @updatedAt
   registrationChannel StatisticsChannel @default(UNKNOWN)
+  // Paid subscription is active while subscriptionUntil > now(). NULL = never subscribed.
+  subscriptionUntil DateTime?
+  // Smallest "days left" value (3, 2 or 1) for which an expiry reminder was already sent
+  // for the current period; reset to NULL on purchase/renewal.
+  subscriptionReminderDay Int?
   profile     EntrepreneurProfile?
   services    Service[]
   operations  Operation[]

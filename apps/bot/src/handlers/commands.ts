@@ -1,4 +1,4 @@
-import type { Bot } from "grammy";
+﻿import type { Bot } from "grammy";
 import { mainMenuKeyboard } from "../keyboards";
 import { logger } from "../services/logger";
 import { getProfileByUserId, upsertTelegramUser } from "../services/userService";
@@ -6,6 +6,7 @@ import type { BotContext } from "../types";
 import { clearRegistrationDraft, clearReceiptDraft } from "../utils/state";
 import { discardBrandingDraft } from "../services/brandingStorage";
 import { sendMenu } from "../utils/telegram";
+import { canUseSubscription } from "../services/subscriptionService";
 
 const registrationIntroText = [
   'Сервис "Квитанатор" помогает индивидуальным предпринимателям на патенте выписывать квитанции и вести учёт.',
@@ -34,7 +35,7 @@ const goToMainFlow = async (ctx: BotContext): Promise<void> => {
   }
 
   clearRegistrationDraft(ctx.session);
-  await sendMenu(ctx, "Главное меню", mainMenuKeyboard());
+  await sendMenu(ctx, "Главное меню", mainMenuKeyboard(canUseSubscription(ctx)));
 };
 
 export const registerCommandHandlers = (bot: Bot<BotContext>): void => {
@@ -51,7 +52,7 @@ export const registerCommandHandlers = (bot: Bot<BotContext>): void => {
         "• смотреть историю операций;",
         "• выгружать операции в Excel."
       ].join("\n"),
-      { reply_markup: mainMenuKeyboard() }
+      { reply_markup: mainMenuKeyboard(canUseSubscription(ctx)) }
     );
   });
 };

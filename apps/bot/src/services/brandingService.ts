@@ -7,19 +7,19 @@ import { BRANDING_NAME_LIMIT, BRANDING_SUBTITLE_LIMIT, parseReceiptBranding, typ
 import { config } from "../config";
 import { renderReceipt } from "./rendererClient";
 import { markLogoSaved, protectReplacedLogo, registerTemporaryLogo } from "./brandingStorage";
+import { canUseSubscription, hasActiveSubscription, isSubscriptionTestUser } from "./subscriptionService";
 
 export const MAX_LOGO_BYTES = 5 * 1024 * 1024;
-export const isBrandingTestUser = (telegramId: number | bigint | undefined | null): boolean =>
-  config.receiptBrandingTestEnabled && telegramId != null
-  && (typeof telegramId === "bigint" || Number.isSafeInteger(telegramId))
-  && BigInt(telegramId) === BigInt(config.dailyStatsTelegramId);
+// Branding is a paid feature: the pilot gate is shared with the subscription (see subscriptionService).
+export const isBrandingTestUser = isSubscriptionTestUser;
+export const canConfigureBranding = canUseSubscription;
 
-export const canConfigureBranding = (ctx: { from?: { id: number }; chat?: { id: number; type: string } }): boolean =>
-  isBrandingTestUser(ctx.from?.id) && ctx.chat?.type === "private" && ctx.chat.id === ctx.from?.id;
-
+/** Branding applies only to Telegram receipts of a pilot user with an active subscription. */
 export const brandingForOperation = (
-  telegramId: number | bigint | undefined | null, channel: "TELEGRAM" | "MAX", value: unknown
-): ReceiptBranding | null => channel === "TELEGRAM" && isBrandingTestUser(telegramId) ? parseReceiptBranding(value) : null;
+  telegramId: number | bigint | undefined | null, channel: "TELEGRAM" | "MAX", value: unknown,
+  subscriptionUntil?: Date | null, now = new Date()
+): ReceiptBranding | null => channel === "TELEGRAM" && isBrandingTestUser(telegramId) && hasActiveSubscription(subscriptionUntil, now)
+  ? parseReceiptBranding(value) : null;
 
 export const validateBrandingText = (text: string, field: "name" | "subtitle"): string => {
   const value = text.trim() === "-" ? "" : text.trim();
@@ -100,8 +100,9 @@ export const storeLogo = async (input: Buffer, receiptsDir = config.receiptsDir)
 };
 
 export const saveReceiptBranding = async (userId: number, branding: ReceiptBranding | null): Promise<void> => {
-  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { telegramId: true } });
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { telegramId: true, subscriptionUntil: true } });
   if (!isBrandingTestUser(user.telegramId)) throw new Error("Тестовое оформление недоступно.");
+  if (!hasActiveSubscription(user.subscriptionUntil)) throw new Error("Брендированная квитанция доступна по подписке.");
   const value = parseReceiptBranding(branding);
   if (branding && !value && (branding.logoFileName || branding.name || branding.subtitle)) throw new Error("Некорректное оформление.");
   const previous = await prisma.entrepreneurProfile.findUniqueOrThrow({ where: { userId }, select: { receiptBranding: true } });

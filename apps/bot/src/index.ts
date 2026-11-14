@@ -9,6 +9,7 @@ import type { BotContext } from "./types";
 import { createMaxClient, ensureMaxWebhook, registerMaxWebhook } from "./max/webhook";
 import { WIDGET_ALLOWED_UPDATES } from "./services/telegramWidgetApi";
 import { startBrandingCleanup } from "./services/brandingStorage";
+import { startSubscriptionReminderScheduler } from "./services/subscriptionService";
 
 const sleep = async (ms: number): Promise<void> => {
   await new Promise((resolve) => setTimeout(resolve, ms));
@@ -36,6 +37,7 @@ const start = async (): Promise<void> => {
   const bot = createBot();
   const maxClient = config.maxEnabled ? createMaxClient() : null;
   startDailyStatsScheduler(bot);
+  startSubscriptionReminderScheduler(bot);
 
   if (config.botMode === "polling") {
     void bot

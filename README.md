@@ -209,10 +209,11 @@ isolated tests): [docs/interactive-statistics.md](docs/interactive-statistics.md
 6. Open operations history and resend the receipt.
 7. Export operations to Excel for different periods.
 
-## Receipt branding pilot
+## Subscription and receipt branding pilot
 
-Telegram-only receipt branding pilot (restricted to `DAILY_STATS_TELEGRAM_ID`):
-[setup, image requirements and tests](docs/receipt-branding-pilot.md).
+Telegram-only test mode for one user (`DAILY_STATS_TELEGRAM_ID`): the main menu gets "Моя подписка"
+with simulated purchase; receipt branding is a paid feature there:
+[setup, rules and tests](docs/subscription-pilot.md), [branding details](docs/receipt-branding-pilot.md).
 
 ## Receipt numbering
 

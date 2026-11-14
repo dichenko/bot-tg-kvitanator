@@ -1,4 +1,4 @@
-import { InlineKeyboard, InputFile, type Bot } from "grammy";
+﻿import { InlineKeyboard, InputFile, type Bot } from "grammy";
 import { parseReceiptBranding, type ReceiptBranding } from "@receipt-bot/shared";
 import type { EntrepreneurProfile } from "@receipt-bot/db";
 import type { BotContext } from "../types";
@@ -7,6 +7,7 @@ import { canConfigureBranding, downloadTelegramLogo, MAX_LOGO_BYTES, removeBrand
 import { clearBrandingDraft } from "../utils/state";
 import { sendMenu } from "../utils/telegram";
 import { logger } from "../services/logger";
+import { hasActiveSubscription } from "../services/subscriptionService";
 import { cleanupBrandingDraftChange, releaseUnusedBrandingLogo, retainBrandingLogo } from "../services/brandingStorage";
 
 const keyboard = () => new InlineKeyboard()
@@ -16,6 +17,7 @@ const keyboard = () => new InlineKeyboard()
   .text("✅ Сохранить", "branding:save").text("Отмена", "branding:cancel").row()
   .text("Вернуть стандартное оформление", "branding:reset");
 
+const backToSubscription = () => new InlineKeyboard().text("⬅️ Моя подписка", "menu:subscription");
 const draft = (ctx: BotContext): ReceiptBranding => ctx.session.brandingDraft ?? { logoFileName: null, name: "", subtitle: "" };
 const show = async (ctx: BotContext, message?: string) => {
   const value = parseReceiptBranding(ctx.session.brandingDraft);
@@ -24,8 +26,13 @@ const show = async (ctx: BotContext, message?: string) => {
     "", "Изменения применятся к новым квитанциям после сохранения."].filter(line => line !== undefined).join("\n"), keyboard());
 };
 
+class SubscriptionRequiredError extends Error {
+  constructor() { super("Брендированная квитанция доступна по подписке. Откройте «Моя подписка»."); }
+}
+
 const profileFor = async (ctx: BotContext): Promise<{ userId: number; profile: EntrepreneurProfile }> => {
   const user = await upsertTelegramUser(ctx.from!);
+  if (!hasActiveSubscription(user.subscriptionUntil)) throw new SubscriptionRequiredError();
   const profile = await getProfileByUserId(user.id);
   if (!profile) throw new Error("Сначала заполните данные ИП через /start.");
   return { userId: user.id, profile };
@@ -62,11 +69,11 @@ export const registerBrandingHandlers = (bot: Bot<BotContext>): void => {
       }
       if (action === "cancel") {
         clearBrandingDraft(ctx.session);
-        await sendMenu(ctx, "Изменения оформления отменены.", new InlineKeyboard().text("⬅️ Данные ИП", "menu:profile"));
+        await sendMenu(ctx, "Изменения оформления отменены.", backToSubscription());
         return;
       }
       if (ctx.session.brandingDraft === undefined) {
-        await ctx.reply("Откройте настройки оформления заново через «Данные ИП».");
+        await ctx.reply("Откройте настройки оформления заново через «Моя подписка».");
         return;
       }
       ctx.session.awaitingInput = null;
@@ -81,7 +88,7 @@ export const registerBrandingHandlers = (bot: Bot<BotContext>): void => {
       } else if (action === "save") {
         await saveReceiptBranding(userId, parseReceiptBranding(ctx.session.brandingDraft));
         clearBrandingDraft(ctx.session);
-        await sendMenu(ctx, "Оформление сохранено. Оно будет применяться к новым квитанциям.", new InlineKeyboard().text("⬅️ Данные ИП", "menu:profile"));
+        await sendMenu(ctx, "Оформление сохранено. Оно будет применяться к новым квитанциям.", backToSubscription());
       } else if (action === "preview") {
         await ctx.reply("Готовлю образец квитанции…");
         const filePath = await renderBrandingPreview(userId, profile, ctx.session.brandingDraft ?? null);
@@ -91,6 +98,11 @@ export const registerBrandingHandlers = (bot: Bot<BotContext>): void => {
       } else if (action === "menu") await show(ctx);
       else await ctx.reply("Неизвестное действие оформления.");
     } catch (error) {
+      if (error instanceof SubscriptionRequiredError) {
+        clearBrandingDraft(ctx.session);
+        await ctx.reply(error.message, { reply_markup: backToSubscription() });
+        return;
+      }
       logger.warn({ userId: ctx.from.id, errorName: error instanceof Error ? error.name : "Error" }, "Branding action failed");
       await ctx.reply("Не удалось выполнить действие. Попробуйте снова или откройте оформление заново.", { reply_markup: new InlineKeyboard().text("К оформлению", "branding:open") });
     }
@@ -130,6 +142,7 @@ export const registerBrandingHandlers = (bot: Bot<BotContext>): void => {
     if (!canConfigureBranding(ctx)) { clearBrandingDraft(ctx.session); return; }
     if (awaiting === "branding_logo") return void await ctx.reply("Отправьте картинку PNG или JPEG либо вернитесь к настройкам кнопкой выше.");
     try {
+      if (!hasActiveSubscription((await upsertTelegramUser(ctx.from)).subscriptionUntil)) { clearBrandingDraft(ctx.session); throw new SubscriptionRequiredError(); }
       if (ctx.session.brandingDraft === undefined) throw new Error("Откройте настройки оформления заново.");
       const field = awaiting === "branding_name" ? "name" : "subtitle";
       ctx.session.brandingDraft = { ...draft(ctx), [field]: validateBrandingText(ctx.message.text, field) };

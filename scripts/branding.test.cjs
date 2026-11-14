@@ -25,13 +25,16 @@ const { payloadSchema } = require("../apps/renderer-worker/dist/receiptPayload")
 const { createInitialSession } = require("../apps/bot/dist/utils/state");
 const { registerBrandingHandlers } = require("../apps/bot/dist/handlers/branding");
 const { registerCallbackHandlers } = require("../apps/bot/dist/handlers/callbacks");
+const { registerSubscriptionHandlers } = require("../apps/bot/dist/handlers/subscription");
+const subscription = require("../apps/bot/dist/services/subscriptionService");
 const { registerMessageHandlers } = require("../apps/bot/dist/handlers/messages");
 const { registerCommandHandlers } = require("../apps/bot/dist/handlers/commands");
 const { chromium } = require("../apps/renderer-worker/node_modules/playwright");
 const { PGlite } = require("@electric-sql/pglite");
 require("../apps/bot/dist/services/logger").logger.level = "silent";
 const admin = 19422781;
-const user = { id: 7, telegramId: BigInt(admin) };
+const future = new Date(Date.now() + 100 * 24 * 3600 * 1000);
+const user = { id: 7, telegramId: BigInt(admin), subscriptionUntil: future };
 const profile = { id: 1, userId: 7, inn: "123456789012", ipFullName: "Иванов Иван Иванович", address: "Москва, ул. Примерная, 1", ogrn: null, timeZone: "Europe/Moscow", receiptBranding: null };
 const payload = { operationId: 7, receiptNumber: "KV-000007", createdAt: "2026-11-14T12:00:00Z", timeZone: "Europe/Moscow", inn: profile.inn, ipFullName: profile.ipFullName, address: profile.address, calculationType: "INCOME", items: [{ title: "Услуга", quantity: "1", price: "1000", amount: "1000" }], amount: "1000", paymentMethod: "CASH" };
 let browser, browserChannel, square, wide, logoFileName;
@@ -59,11 +62,13 @@ test("pilot permits only configured TGID, private chat, and Telegram operations;
     assert.equal(service.canConfigureBranding({ from: { id }, chat: { id: chatId, type } }), allowed);
   }
   const brand = { logoFileName: null, name: "Мастерская", subtitle: "Ремонт" };
-  assert.deepEqual(service.brandingForOperation(admin, "TELEGRAM", brand), brand);
-  assert.equal(service.brandingForOperation(admin, "MAX", brand), null);
-  assert.equal(service.brandingForOperation(admin + 1, "TELEGRAM", brand), null);
+  assert.deepEqual(service.brandingForOperation(admin, "TELEGRAM", brand, future), brand);
+  assert.equal(service.brandingForOperation(admin, "TELEGRAM", brand), null, "no subscription");
+  assert.equal(service.brandingForOperation(admin, "TELEGRAM", brand, new Date(Date.now() - 1000)), null, "expired subscription");
+  assert.equal(service.brandingForOperation(admin, "MAX", brand, future), null);
+  assert.equal(service.brandingForOperation(admin + 1, "TELEGRAM", brand, future), null);
   config.receiptBrandingTestEnabled = false;
-  try { assert.equal(service.canConfigureBranding({ from: { id: admin }, chat: { id: admin, type: "private" } }), false); assert.equal(service.brandingForOperation(admin, "TELEGRAM", brand), null); }
+  try { assert.equal(service.canConfigureBranding({ from: { id: admin }, chat: { id: admin, type: "private" } }), false); assert.equal(service.brandingForOperation(admin, "TELEGRAM", brand, future), null); }
   finally { config.receiptBrandingTestEnabled = true; }
 });
 
@@ -113,7 +118,7 @@ function harness(id = admin, chatType = "private", initial = createInitialSessio
   });
   bot.use(session({ initial: () => data }));
   registerCommandHandlers(bot);
-  registerBrandingHandlers(bot); registerMessageHandlers(bot); registerCallbackHandlers(bot);
+  registerBrandingHandlers(bot); registerSubscriptionHandlers(bot); registerMessageHandlers(bot); registerCallbackHandlers(bot);
   const message = extra => ({ message_id: ++sequence, date: 0, from, chat, ...extra });
   return { calls, data,
     callback: text => bot.handleUpdate({ update_id: ++sequence, callback_query: { id: String(sequence), from, chat_instance: "1", data: text, message: message({ text: "Menu" }) } }),
@@ -137,10 +142,12 @@ test("real bot middleware hides menu and rejects forged callbacks/media for othe
       assert(h.calls.some(c => c.method === "answerCallbackQuery" && c.params.show_alert));
       h.data.awaitingInput = "branding_logo"; await h.photo();
       assert.equal(h.calls.filter(c => c.method === "getFile").length, 0);
-      const menu = harness(id, type); await menu.callback("menu:profile");
-      assert(!menu.calls.some(c => JSON.stringify(c.params.reply_markup ?? {}).includes("branding:open")));
+      const menu = harness(id, type); await menu.callback("menu:main"); await menu.callback("menu:subscription");
+      assert(!menu.calls.some(c => JSON.stringify(c.params.reply_markup ?? {}).match(/menu:subscription|branding:open/)));
     }
     const menu = harness(); await menu.callback("menu:profile");
+    assert(!menu.calls.some(c => JSON.stringify(c.params.reply_markup ?? {}).includes("branding:open")), "branding moved out of the profile menu");
+    await menu.callback("menu:subscription");
     assert(menu.calls.some(c => JSON.stringify(c.params.reply_markup ?? {}).includes("branding:open")));
   });
 });
@@ -179,8 +186,11 @@ test("failed upload retains previous logo and service independently rejects unau
   await withMocks([[prisma.user, "upsert", async () => user], [prisma.entrepreneurProfile, "findUnique", async () => profile], [global, "fetch", async () => new Response("not an image")]], async () => {
     await h.photo(); assert.deepEqual(h.data.brandingDraft, branding); assert.equal(h.data.awaitingInput, "branding_logo");
   });
-  await withMocks([[prisma.user, "findUniqueOrThrow", async () => ({ telegramId: BigInt(admin + 1) })]], async () => {
+  await withMocks([[prisma.user, "findUniqueOrThrow", async () => ({ telegramId: BigInt(admin + 1), subscriptionUntil: future })]], async () => {
     await assert.rejects(service.saveReceiptBranding(user.id, branding), /недоступно/);
+  });
+  await withMocks([[prisma.user, "findUniqueOrThrow", async () => ({ telegramId: BigInt(admin), subscriptionUntil: null })]], async () => {
+    await assert.rejects(service.saveReceiptBranding(user.id, branding), /по подписке/);
   });
 });
 
@@ -263,7 +273,9 @@ test("operation snapshot is gated and immutable; rendering uses saved branding r
     assert.equal(created[0].brandingSnapshot.name, "Original");
     await operations.createOperationWithSnapshots({ ...user, telegramId: BigInt(admin + 1) }, p, [], draft, "TELEGRAM");
     await operations.createOperationWithSnapshots(user, p, [], draft, "MAX");
+    await operations.createOperationWithSnapshots({ ...user, subscriptionUntil: new Date(Date.now() - 1000) }, p, [], draft, "TELEGRAM");
     assert.equal(created[1].brandingSnapshot, Prisma.DbNull); assert.equal(created[2].brandingSnapshot, Prisma.DbNull);
+    assert.equal(created[3].brandingSnapshot, Prisma.DbNull, "expired subscription falls back to the standard header");
   });
   const op = { ...created[0], id: 1, createdAt: new Date(payload.createdAt), items: [{ title: "Service", quantity: 1, price: 100, amount: 100 }] };
   let sent;
@@ -356,4 +368,86 @@ test("additive migration retains old records, persists branding JSON and keeps o
       await assert.rejects(fs.access(path.join(receiptsDir, "branding", unused)));
     });
   } finally { await db.close(); }
+});
+
+const DAY = 24 * 3600 * 1000;
+const markups = h => JSON.stringify(h.calls.map(c => c.params?.reply_markup ?? {}));
+const lastText = h => [...h.calls].reverse().find(c => c.params?.text)?.params.text ?? "";
+
+test("subscription: main menu button only for the pilot user; unpaid user sees offer and Buy", async () => {
+  await withMocks([[prisma.user, "upsert", async () => ({ ...user, subscriptionUntil: null })], [prisma.entrepreneurProfile, "findUnique", async () => profile]], async () => {
+    const other = harness(admin + 1); await other.callback("menu:main");
+    assert(!markups(other).includes("menu:subscription"));
+    await other.callback("menu:subscription"); assert(other.calls.some(c => c.method === "answerCallbackQuery" && c.params.show_alert));
+    const h = harness(); await h.callback("menu:main"); assert(markups(h).includes("menu:subscription"));
+    await h.callback("menu:subscription");
+    const text = lastText(h);
+    assert.match(text, /60 рублей в месяц при оплате за год/); assert.match(text, /Брендированная квитанция/); assert.match(text, /Синхронизация Max и Telegram/);
+    assert.match(markups(h), /sub:buy/); assert(!markups(h).includes("branding:open"));
+  });
+});
+
+test("subscription: Buy grants 365 days once, shows paid menu, sync is a stub, branding needs subscription", async () => {
+  let until = null; const updates = [];
+  await withMocks([
+    [prisma.user, "upsert", async () => ({ ...user, subscriptionUntil: until })],
+    [prisma.user, "findUniqueOrThrow", async () => ({ telegramId: BigInt(admin), subscriptionUntil: until })],
+    [prisma.user, "updateMany", async ({ where, data }) => { updates.push(data); if (where.subscriptionUntil?.getTime() !== until?.getTime()) return { count: 0 }; until = data.subscriptionUntil; return { count: 1 }; }],
+    [prisma.entrepreneurProfile, "findUnique", async () => profile]
+  ], async () => {
+    const h = harness();
+    await h.callback("branding:open"); assert(!h.data.brandingDraft, "branding is closed without subscription");
+    assert.match(lastText(h), /по подписке/);
+    await h.callback("sub:buy");
+    assert(until); assert(Math.abs(until.getTime() - Date.now() - 365 * DAY) < 60_000);
+    assert.match(lastText(h), /Осталось: 365 дней/); assert.match(markups(h), /branding:open/); assert.match(markups(h), /sub:sync/);
+    assert(!markups(h).includes("Продлить"), "no renew button far from the end");
+    const first = until; await h.callback("sub:buy"); assert.equal(until, first, "double buy does not extend early");
+    const before = h.calls.length; await h.callback("sub:sync");
+    assert(h.calls.slice(before).some(c => c.method === "answerCallbackQuery" && /недоступна/.test(c.params.text)));
+    await h.callback("branding:open"); assert(h.data.brandingDraft !== undefined);
+  });
+});
+
+test("subscription: days left, renewal window, renewal appends to the end date, expiry", async () => {
+  const now = new Date("2026-11-14T10:00:00Z"), at = ms => new Date(now.getTime() + ms);
+  assert.equal(subscription.subscriptionDaysLeft(at(3 * DAY), now), 3); assert.equal(subscription.subscriptionDaysLeft(at(2.5 * DAY), now), 3);
+  assert.equal(subscription.subscriptionDaysLeft(at(1000), now), 1); assert.equal(subscription.subscriptionDaysLeft(at(-1000), now), 0);
+  assert.equal(subscription.subscriptionDaysLeft(null, now), 0);
+  assert(subscription.canRenewSubscription(at(3 * DAY), now)); assert(!subscription.canRenewSubscription(at(3 * DAY + 1000), now));
+  assert(subscription.canRenewSubscription(at(-DAY), now)); assert(subscription.canRenewSubscription(null, now));
+  assert.deepEqual([1, 2, 5, 11, 21, 22, 365].map(subscription.pluralizeDays), ["день", "дня", "дней", "дней", "день", "дня", "дней"]);
+  assert.match(subscription.buildSubscriptionText({ subscriptionUntil: at(2 * DAY) }, "Europe/Moscow", now), /Осталось: 2 дня/);
+  assert.match(subscription.buildSubscriptionText({ subscriptionUntil: at(-DAY) }, "Europe/Moscow", now), /закончилась/);
+  let saved; const row = { telegramId: BigInt(admin), subscriptionUntil: at(2 * DAY) };
+  await withMocks([[prisma.user, "findUniqueOrThrow", async () => row], [prisma.user, "updateMany", async ({ data }) => { saved = data; return { count: 1 }; }]], async () => {
+    const result = await subscription.purchaseSubscription(7, now);
+    assert.equal(result.getTime(), at(2 * DAY + 365 * DAY).getTime()); assert.equal(saved.subscriptionReminderDay, null);
+    row.subscriptionUntil = at(-DAY); assert.equal((await subscription.purchaseSubscription(7, now)).getTime(), at(365 * DAY).getTime());
+    row.subscriptionUntil = at(30 * DAY); assert.equal(await subscription.purchaseSubscription(7, now), null);
+    row.telegramId = BigInt(admin + 1); await assert.rejects(subscription.purchaseSubscription(7, now), /недоступна/);
+  });
+});
+
+test("subscription: reminders at 3, 2 and 1 day are sent once each and a purchase resets them", async () => {
+  const now = new Date("2026-11-14T10:00:00Z"), sent = [];
+  const row = { id: 7, telegramId: BigInt(admin), subscriptionUntil: new Date(now.getTime() + 3 * DAY), subscriptionReminderDay: null, profile: { timeZone: "Europe/Moscow" } };
+  const bot = { api: { sendMessage: async (id, text) => { sent.push(text); return {}; } } };
+  await withMocks([
+    [prisma.user, "findMany", async ({ where }) => { assert.equal(where.telegramId, BigInt(admin)); return [{ ...row }]; }],
+    [prisma.user, "updateMany", async ({ where, data }) => { if (where.subscriptionReminderDay !== row.subscriptionReminderDay) return { count: 0 }; row.subscriptionReminderDay = data.subscriptionReminderDay; return { count: 1 }; }]
+  ], async () => {
+    const at = d => new Date(row.subscriptionUntil.getTime() - d * DAY + 1000 - 1000);
+    assert.equal(await subscription.runSubscriptionReminders(bot, at(3)), 1);
+    assert.equal(await subscription.runSubscriptionReminders(bot, at(3)), 0, "repeated tick does not resend");
+    assert.equal(await subscription.runSubscriptionReminders(bot, at(2.5)), 0);
+    assert.equal(await subscription.runSubscriptionReminders(bot, at(2)), 1);
+    assert.equal(await subscription.runSubscriptionReminders(bot, at(1)), 1);
+    assert.equal(await subscription.runSubscriptionReminders(bot, at(0.5)), 0);
+    assert.deepEqual(sent.map(t => t.match(/через (\d+)/)[1]), ["3", "2", "1"]);
+    row.subscriptionReminderDay = null; row.subscriptionUntil = new Date(now.getTime() + 3 * DAY);
+    assert.equal(await subscription.runSubscriptionReminders(bot, now), 1);
+    config.receiptBrandingTestEnabled = false;
+    try { row.subscriptionReminderDay = null; assert.equal(await subscription.runSubscriptionReminders(bot, now), 0); } finally { config.receiptBrandingTestEnabled = true; }
+  });
 });

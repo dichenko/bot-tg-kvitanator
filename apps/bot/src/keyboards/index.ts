@@ -2,8 +2,9 @@ import type { Operation, PaymentMethod, ReceiptCalculationType, Service } from "
 import { InlineKeyboard } from "grammy";
 import { DEFAULT_TIME_ZONE, TIME_ZONE_OPTIONS, formatTimeZoneButtonLabel, formatTimeZoneLabel } from "@receipt-bot/shared";
 
-export const mainMenuKeyboard = (): InlineKeyboard =>
-  new InlineKeyboard()
+/** `showSubscription` is true only for the Telegram subscription pilot user (see subscriptionService). */
+export const mainMenuKeyboard = (showSubscription = false): InlineKeyboard => {
+  const keyboard = new InlineKeyboard()
     .text("➕ Новая квитанция", "menu:receipt:new")
     .row()
     .text("🧾 Услуги", "menu:services")
@@ -11,10 +12,22 @@ export const mainMenuKeyboard = (): InlineKeyboard =>
     .row()
     .text("📄 Квитанции", "menu:operations")
     .text("👤 Данные ИП", "menu:profile");
+  if (showSubscription) keyboard.row().text("⭐ Моя подписка", "menu:subscription");
+  return keyboard;
+};
 
 export const backToMainKeyboard = (): InlineKeyboard => new InlineKeyboard().text("⬅️ Назад", "menu:main");
 
-export const profileKeyboard = (enableBranding = false): InlineKeyboard => {
+/** Subscription screen: purchase for users without a subscription, paid features otherwise. */
+export const subscriptionKeyboard = (active: boolean, canRenew: boolean): InlineKeyboard => {
+  const keyboard = new InlineKeyboard();
+  if (!active) return keyboard.text("💳 Купить подписку", "sub:buy").row().text("⬅️ Назад", "menu:main");
+  keyboard.text("🖼 Добавить свой логотип", "branding:open").row().text("🔄 Синхронизировать Max и TG", "sub:sync").row();
+  if (canRenew) keyboard.text("💳 Продлить подписку", "sub:buy").row();
+  return keyboard.text("⬅️ Назад", "menu:main");
+};
+
+export const profileKeyboard = (): InlineKeyboard => {
   const keyboard = new InlineKeyboard()
     .text("✏️ Изменить ИНН", "profile:edit:inn")
     .row()
@@ -26,7 +39,6 @@ export const profileKeyboard = (enableBranding = false): InlineKeyboard => {
     .row()
     .text("🕒 Изменить часовой пояс", "profile:tz")
     .row();
-  if (enableBranding) keyboard.text("🎨 Оформление квитанции · тест", "branding:open").row();
   return keyboard.text("⬅️ Назад", "menu:main");
 };
 
