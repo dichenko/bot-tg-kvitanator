@@ -35,7 +35,7 @@ export const registerSubscriptionHandlers = (bot: Bot<BotContext>): void => {
       if (action === "sub:buy") {
         const until = await purchaseSubscription(user.id);
         const fresh = await upsertTelegramUser(ctx.from);
-        const message = until ? `Подписка оформлена до ${formatSubscriptionDate(until, profile.timeZone)}. Это тестовая имитация оплаты.`
+        const message = until ? `Подписка оформлена до ${formatSubscriptionDate(until, profile.timeZone)}. Подарок первым пользователям: подписка на год - бесплатно!`
           : "Подписка уже активна. Продлить её можно за 3 дня до окончания.";
         return void await show(ctx, fresh, profile.timeZone, message);
       }
