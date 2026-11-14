@@ -46,7 +46,7 @@ export const servicesKeyboard = (): MaxKeyboard => [
 ];
 
 export const serviceSelectionKeyboard = (services: Service[], prefix: string, includeBack = true, includeManual = false): MaxKeyboard => {
-  const rows: MaxKeyboard = services.map((service) => [{ text: service.title, payload: `${prefix}:${service.id}` }]);
+  const rows: MaxKeyboard = services.map((service, index) => [{ text: `${index + 1}. ${service.title}`, payload: `${prefix}:${service.id}` }]);
 
   if (includeManual) {
     rows.push([{ text: "✏️ Ввести вручную", payload: `${prefix}:manual` }]);
