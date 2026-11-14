@@ -93,12 +93,15 @@ pnpm prisma:migrate:deploy
 4. Point the domain A or AAAA record to the VPS public IP.
 4. Push to `main` to trigger GitHub Actions deployment.
 
-The workflow will:
+Every push to `main` starts the Deploy workflow. It can also be run manually from
+GitHub Actions using **Run workflow** on `main`.
 
-1. Pull latest code on the VPS.
-2. Rebuild containers.
-3. Restart services.
-4. Run Prisma migrations inside the bot container.
+The workflow deploys through a dedicated SSH key, verifies the server host key,
+serializes deployments, builds images, backs up PostgreSQL, applies migrations,
+restarts the bot/renderer and checks both HTTP health endpoints and database
+access. A successful run ends with `Deployment verified: <commit SHA>`.
+
+Setup and troubleshooting: [docs/deployment.md](docs/deployment.md).
 
 ## DBeaver via SSH tunnel
 
