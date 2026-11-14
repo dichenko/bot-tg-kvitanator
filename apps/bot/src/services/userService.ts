@@ -89,6 +89,12 @@ export const updateProfileField = async (
     data: { [field]: value }
   });
 
+export const updateProfileTimeZone = async (userId: number, timeZone: string): Promise<EntrepreneurProfile> =>
+  prisma.entrepreneurProfile.update({
+    where: { userId },
+    data: { timeZone }
+  });
+
 export const listActiveServices = async (userId: number): Promise<Service[]> =>
   prisma.service.findMany({
     where: {

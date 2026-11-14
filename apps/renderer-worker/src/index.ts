@@ -1,6 +1,7 @@
 import express from "express";
 import type { RenderReceiptRequest } from "@receipt-bot/shared";
 import { z } from "zod";
+import { IANAZone } from "luxon";
 import { config } from "./config";
 import { logger } from "./logger";
 import { renderReceiptImage } from "./renderReceipt";
@@ -9,6 +10,7 @@ const payloadSchema = z.object({
   operationId: z.number().int().positive(),
   receiptNumber: z.string().min(1),
   createdAt: z.string().datetime(),
+  timeZone: z.string().refine((value) => IANAZone.isValidZone(value), "Invalid IANA timezone").optional(),
   inn: z.string().min(1),
   ogrn: z.string().nullable().optional(),
   ipFullName: z.string().min(1),
