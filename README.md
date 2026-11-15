@@ -6,10 +6,6 @@ The current production channel is Telegram. MAX can be enabled as an additional 
 
 This project does not generate fiscal receipts and does not integrate with online cash registers or OFD services. The generated document is an internal receipt (`Квитанция`).
 
-## Status
-
-Implementation progress is tracked in [CHECKPOINTS.md](CHECKPOINTS.md).
-
 ## Stack
 
 - Node.js 20+
