@@ -6,8 +6,8 @@ const number = new Intl.NumberFormat("ru-RU");
 const axisNumber = new Intl.NumberFormat("ru-RU", { notation: "compact", maximumFractionDigits: 1 });
 const shortDate = (iso: string) => DateTime.fromISO(iso).toFormat("dd.MM");
 
-function chartPanel(days: MonthChartDay[], metric: "users" | "active" | "receipts", title: string, color: string, top: number): string {
-  const values = days.map(day => day[metric]);
+function chartPanel(days: MonthChartDay[], metric: "users" | "active" | "active7" | "receipts", title: string, color: string, top: number): string {
+  const values = days.map(day => day[metric] ?? 0);
   const peak = Math.max(1, ...values);
   const unit = 10 ** Math.floor(Math.log10(peak));
   const ceiling = Math.ceil(peak / unit) * unit;
@@ -18,7 +18,7 @@ function chartPanel(days: MonthChartDay[], metric: "users" | "active" | "receipt
   const grid = [0, ceiling].map(tick => `
     <path d="M${left} ${y(tick)}H${right}" stroke="#d9e4e4"/>
     <text x="${left - 10}" y="${y(tick) + 6}" text-anchor="end" font-size="17" fill="#455d63">${axisNumber.format(tick)}</text>`).join("");
-  const series = metric === "users"
+  const series = metric === "users" || metric === "active7"
     ? `<path d="M${x(0)} ${y(values[0])} ${values.slice(1).map((v, i) => `H${x(i + 1)}V${y(v)}`).join(" ")}" fill="none" stroke="${color}" stroke-width="5" stroke-linejoin="round"/>
        <circle cx="${x(days.length - 1)}" cy="${y(values[values.length - 1])}" r="5" fill="${color}"/>`
     : values.map((v, i) => `<rect x="${x(i) - step * 0.34}" y="${y(v)}" width="${step * 0.68}" height="${base - y(v)}" fill="${color}" rx="2"/>`).join("");
@@ -35,15 +35,20 @@ export async function renderStatisticsChart(days: MonthChartDay[], cutoff: strin
   const end = DateTime.fromISO(cutoff).setZone(timezone);
   const stamp = end.toFormat("dd.MM.yyyy, HH:mm");
   const zone = timezone === "Europe/Moscow" ? "МСК" : end.toFormat("'UTC'ZZ");
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="900" height="900">
-    <rect width="900" height="900" fill="#edf4f2"/>
+  // Reports saved before the 7-day metric existed have no active7: draw the old three panels.
+  const hasActive7 = days.every(day => day.active7 !== undefined);
+  const height = hasActive7 ? 1148 : 900;
+  const receiptsTop = hasActive7 ? 896 : 648;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="900" height="${height}">
+    <rect width="900" height="${height}" fill="#edf4f2"/>
     <g font-family="DejaVu Sans, Arial, sans-serif" fill="#193638">
       <text x="44" y="58" font-weight="bold" font-size="40">Статистика за 30 дней</text>
       <text x="46" y="97" font-size="23" fill="#455d63">${shortDate(days[0].date)} – ${shortDate(days[29].date)} · Данные на ${stamp} ${zone}</text>
       <text x="46" y="132" font-size="20" fill="#455d63">Справа — значения за ${shortDate(days[29].date)}</text>
       ${chartPanel(days, "users", "Всего пользователей", "#146e66", 152)}
       ${chartPanel(days, "active", "Активные пользователи за день", "#345ea6", 400)}
-      ${chartPanel(days, "receipts", "Выданные квитанции за день", "#a75622", 648)}
+      ${hasActive7 ? chartPanel(days, "active7", "Активные за 7 дней", "#7a4fb3", 648) : ""}
+      ${chartPanel(days, "receipts", "Выданные квитанции за день", "#a75622", receiptsTop)}
     </g>
   </svg>`;
   return sharp(Buffer.from(svg)).png().toBuffer();

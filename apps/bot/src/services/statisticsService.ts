@@ -6,7 +6,8 @@ export type StatsPeriod = typeof PERIODS[number];
 export type ChartChannel = "all" | "tg" | "max";
 export type ChannelCounts = { total: number; telegram: number; max: number; unknown: number; overlap: number };
 export type StatsBucket = { from: string; to: string; telegram: number; max: number; unknown: number };
-export type MonthChartDay = { date: string; users: number; active: number; receipts: number };
+// active7: unique users with >=1 sent receipt in the 7 local days ending on `date` (absent in reports saved before this metric).
+export type MonthChartDay = { date: string; users: number; active: number; active7?: number; receipts: number };
 export type PeriodStatistics = {
   from: string;
   to: string;
@@ -99,15 +100,20 @@ const aggregateMonthlyChart = async (tx: Prisma.TransactionClient, cutoff: DateT
   const lastDay = cutoff.minus({ milliseconds: 1 }).startOf("day");
   const firstDay = lastDay.minus({ days: 29 });
   const days = Array.from({ length: 30 }, (_, i) => firstDay.plus({ days: i }));
+  // wlo: start of the rolling 7-day window (this local day and the 6 before it).
   const bounds = Prisma.join(days.map((day, i) => {
     const end = days[i + 1] ?? cutoff;
-    return Prisma.sql`(${i}::int, ${day.toJSDate()}::timestamp, ${end.toJSDate()}::timestamp)`;
+    return Prisma.sql`(${i}::int, ${day.toJSDate()}::timestamp, ${end.toJSDate()}::timestamp, ${day.minus({ days: 6 }).toJSDate()}::timestamp)`;
   }));
-  const rows = await tx.$queryRaw<{ day: number; users: bigint; active: bigint; receipts: bigint }[]>(Prisma.sql`
-    WITH bounds(day, lo, hi) AS (VALUES ${bounds})
+  const rows = await tx.$queryRaw<{ day: number; users: bigint; active: bigint; active7: bigint; receipts: bigint }[]>(Prisma.sql`
+    WITH bounds(day, lo, hi, wlo) AS (VALUES ${bounds})
     SELECT day, ((SELECT count(*) FROM users WHERE "createdAt" < ${firstDay.toJSDate()}) +
-      sum(registrations.n) OVER (ORDER BY day))::bigint AS users, issued.active, issued.receipts
+      sum(registrations.n) OVER (ORDER BY day))::bigint AS users, issued.active, rolling.active7, issued.receipts
     FROM bounds
+    CROSS JOIN LATERAL (
+      SELECT count(DISTINCT "userId") AS active7 FROM operations
+      WHERE status = 'SENT' AND COALESCE("sentAt", "createdAt") >= wlo AND COALESCE("sentAt", "createdAt") < hi
+    ) rolling
     CROSS JOIN LATERAL (
       SELECT count(*) AS n FROM users WHERE "createdAt" >= lo AND "createdAt" < hi
     ) registrations
@@ -118,7 +124,7 @@ const aggregateMonthlyChart = async (tx: Prisma.TransactionClient, cutoff: DateT
     ORDER BY day
   `);
   return rows.map(row => ({
-    date: days[row.day].toISODate()!, users: Number(row.users), active: Number(row.active), receipts: Number(row.receipts)
+    date: days[row.day].toISODate()!, users: Number(row.users), active: Number(row.active), active7: Number(row.active7), receipts: Number(row.receipts)
   }));
 };
 

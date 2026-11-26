@@ -15,7 +15,7 @@
 | Новая квитанция, добавить услугу в квитанцию, цена, количество, форма оплаты, «Приход/Возврат», предпросмотр | `menu:receipt:new`, `receipt:*` | `handlers/callbacks.ts` (блок receipt:), `handlers/messages.ts` | `max/handlers.ts` | `services/operationService.ts` (buildReceiptPreviewText, createOperationWithSnapshots) |
 | Квитанция формируется / не пришла / ошибка рендера | `receipt:confirm` | — | — | `operationService.renderAndSendOperation` → `services/rendererClient.ts` → `apps/renderer-worker/src/renderReceipt.ts` |
 | Внешний вид квитанции (шаблон, шрифты, поля) | — | — | — | `apps/renderer-worker/src/templates/receipt.hbs`, `receiptPayload.ts` |
-| Номер квитанции KV-000001 | — | — | — | `operationService.ts` (createOperationWithSnapshots); схема `Operation.receiptNumber` |
+| Номер квитанции KV-000001 (план: KVT для TG, KVM для MAX; единый сквозной счётчик; старые номера сохраняются) | — | — | — | `operationService.ts` (createOperationWithSnapshots); схема `Operation.receiptNumber`; проектные правила — `docs/account-linking.md`, раздел 2.1 |
 | Список квитанций, история, повторно отправить, удалить квитанцию | `menu:operations`, `history:*` | `handlers/callbacks.ts` | `max/handlers.ts` | `operationService.ts` (listRecentOperations, sendExistingReceipt, deleteOperationForUser) |
 | Услуги: список, добавить, удалить | `menu:services`, `service:*` | `handlers/callbacks.ts` | `max/handlers.ts` | `services/userService.ts` (listActiveServices, createService, softDeleteService) |
 | Данные ИП: ИНН, ФИО, адрес, ОГРН | `menu:profile`, `profile:edit:*` | `handlers/callbacks.ts` | `max/handlers.ts` | `userService.ts` (upsertProfile, updateProfileField), `utils/validation.ts` |
@@ -26,8 +26,8 @@
 | Оплата подписки (ещё НЕ подключена, сейчас подарок 365 дней) | `sub:buy` | `handlers/subscription.ts` | `max/subscription.ts` | `subscriptionService.purchaseSubscription` |
 | Свой логотип / подпись на квитанции (брендинг) | `branding:*` | `handlers/branding.ts` | `max/subscription.ts` (branding: и handleMaxBrandingInput) | `services/brandingService.ts`, `brandingStorage.ts`, `packages/shared/src/branding.ts`; вид — `receipt.hbs`; детали — `docs/receipt-branding-pilot.md` |
 | Поддержка (написать автору бота) | `support:open` | `handlers/subscription.ts` | `max/subscription.ts` (handleMaxSupportInput) | `services/supportService.ts` |
-| «Синхронизировать Max и TG» (пока заглушка) | `sub:sync` | `handlers/subscription.ts` | `max/subscription.ts` | — |
-| Статистика для админа, /stats, ежедневный отчёт, картинка с графиком за месяц | `/stats` | `handlers/statistics.ts` | — | `statisticsService.ts`, `statisticsChart.ts`, `statisticsWidget.ts`, `dailyStatsService.ts`, `telegramWidgetApi.ts`; `docs/interactive-statistics.md` |
+| «Синхронизировать Max и TG», подключить второй мессенджер, объединить истории одного ИП (пока заглушка) | `sub:sync` | `handlers/subscription.ts` | `max/subscription.ts` | Связывание ещё не реализовано; `docs/account-linking.md`: префиксы KVT/KVM с единым счётчиком, более поздняя подписка; раздел 13 — совместимость с действующими пользователями |
+| Статистика для админа, /stats, ежедневный отчёт, картинка с графиками за месяц (пользователи, активные за день, активные за 7 дней, квитанции) | `/stats` | `handlers/statistics.ts` | — | `statisticsService.ts`, `statisticsChart.ts`, `statisticsWidget.ts`, `dailyStatsService.ts`, `telegramWidgetApi.ts`; `docs/interactive-statistics.md` |
 | Что-то со вебхуками, запуском, health | — | `apps/bot/src/index.ts` | `max/webhook.ts`, `max/client.ts` | `config.ts` (env-переменные) |
 | Деплой, сервер, GitHub Actions | — | — | — | `.github/workflows/deploy.yml`, `scripts/deploy*.sh`, `docs/deployment.md` |
 | Таблицы БД, новое поле | — | — | — | `packages/db/prisma/schema.prisma` + новая миграция в `packages/db/prisma/migrations/` |

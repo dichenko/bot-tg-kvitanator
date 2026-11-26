@@ -165,10 +165,12 @@ test("all periods are aggregated in one repeatable-read transaction; saved repor
   prisma.$transaction=async(fn,opts)=>{assert.equal(opts.isolationLevel,"RepeatableRead");return fn(tx)};
   try{snapshot=await buildStatisticsSnapshot(cutoff)}finally{prisma.$transaction=original}
   assert.equal(snapshot.monthlyChart.length, 30);
-  assert.deepEqual(snapshot.monthlyChart[0], {date:"2026-10-16", users:4, active:0, receipts:0});
-  assert.deepEqual(snapshot.monthlyChart.slice(-2), [
-    {date:"2026-11-13", users:4, active:3, receipts:5},
-    {date:"2026-11-14", users:8, active:1, receipts:1}
+  assert.deepEqual(snapshot.monthlyChart[0], {date:"2026-10-16", users:4, active:0, active7:0, receipts:0});
+  // active7 = unique users with a SENT receipt in the 7 local days ending on that date (rolling window).
+  assert.deepEqual(snapshot.monthlyChart.slice(-3), [
+    {date:"2026-11-12", users:4, active:0, active7:0, receipts:0},
+    {date:"2026-11-13", users:4, active:3, active7:3, receipts:5},
+    {date:"2026-11-14", users:8, active:1, active7:4, receipts:1}
   ]);
   const stored=JSON.stringify(snapshot);
   await db.query('DELETE FROM operations WHERE id=10');
