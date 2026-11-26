@@ -164,6 +164,12 @@ test("all periods are aggregated in one repeatable-read transaction; saved repor
   const original=prisma.$transaction;
   prisma.$transaction=async(fn,opts)=>{assert.equal(opts.isolationLevel,"RepeatableRead");return fn(tx)};
   try{snapshot=await buildStatisticsSnapshot(cutoff)}finally{prisma.$transaction=original}
+  assert.equal(snapshot.monthlyChart.length, 30);
+  assert.deepEqual(snapshot.monthlyChart[0], {date:"2026-10-16", users:4, active:0, receipts:0});
+  assert.deepEqual(snapshot.monthlyChart.slice(-2), [
+    {date:"2026-11-13", users:4, active:3, receipts:5},
+    {date:"2026-11-14", users:8, active:1, receipts:1}
+  ]);
   const stored=JSON.stringify(snapshot);
   await db.query('DELETE FROM operations WHERE id=10');
   assert.equal(JSON.stringify(snapshot),stored);
@@ -199,11 +205,43 @@ function mockReports(initial){
   return {rows,methods,restore(){for(const key of Object.keys(original))prisma.statisticsReport[key]=original[key]}};
 }
 
-test("successful widget delivery and API-error text fallback use identical metrics", async () => {
+test("successful widget delivery and legacy text fallback use identical metrics", async () => {
   for(const fail of [false,true]){
     const r=report();const mock=mockReports([r]);const calls=[];
     const bot={api:{raw:{sendWidget:async args=>{calls.push(["widget",args]);if(fail)throw Error("unsupported");return {message_id:42}}},sendMessage:async(id,text)=>{calls.push(["text",text]);return {message_id:43}}}};
     try{await deliverStatisticsReport(bot,{...r});assert.equal(calls[0][1].caption,formatStatsText(r.snapshot));assert(calls[0][1].allow_queries);assert.equal(r.state,fail?"FALLBACK":"SENT");if(fail)assert.equal(calls[1][1],calls[0][1].caption);else assert.equal(calls.length,1)}finally{mock.restore()}
+  }
+});
+
+test("unavailable widgets produce one PNG photo with the daily caption; ambiguous photo sends are not retried", async () => {
+  for (const timeout of [false, true]) {
+    const r = report({snapshot});
+    const mock = mockReports([r]);
+    let photos = 0;
+    const bot = {api: {
+      raw: {sendWidget: async () => {throw Error("INPUT_MEDIA_WIDGET_NOT_ALLOWED");}},
+      sendPhoto: async (id, file, options) => {
+        photos++;
+        assert.equal(id, 1234);
+        assert.equal(options.caption, formatStatsText(snapshot));
+        assert.equal(file.filename, "statistics.png");
+        const bytes = await file.toRaw();
+        assert.equal(bytes.subarray(1, 4).toString(), "PNG");
+        if (timeout) throw Error("photo timeout");
+        return {message_id: 77};
+      }
+    }};
+    try {
+      if (timeout) {
+        await assert.rejects(deliverStatisticsReport(bot, r), /photo timeout/);
+        assert.equal(r.state, "UNCERTAIN");
+      } else {
+        await deliverStatisticsReport(bot, r);
+        assert.equal(r.state, "FALLBACK");
+        assert.equal(r.messageId, 77);
+      }
+      assert.equal(photos, 1);
+    } finally {mock.restore();}
   }
 });
 

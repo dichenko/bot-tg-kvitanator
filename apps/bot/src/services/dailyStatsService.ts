@@ -1,9 +1,10 @@
 import { Prisma, prisma, type StatisticsReport } from "@receipt-bot/db";
 import { DateTime } from "luxon";
-import { GrammyError, type Bot } from "grammy";
+import { GrammyError, InputFile, type Bot } from "grammy";
 import type { BotContext } from "../types";
 import { config } from "../config";
 import { logger } from "./logger";
+import { renderStatisticsChart } from "./statisticsChart";
 import { buildStatisticsSnapshot, formatStatsText, type StatisticsSnapshot } from "./statisticsService";
 import { encodeWidgetData, STATISTICS_WIDGET_HTML, validateWidgetHtml } from "./statisticsWidget";
 import { telegramTimeout, widgetApi } from "./telegramWidgetApi";
@@ -42,6 +43,28 @@ const claimDailyReport = async (cutoff: DateTime): Promise<StatisticsReport | nu
   return won.count ? { ...report, leaseUntil } : null;
 };
 
+async function sendReportFallback(bot: Bot<BotContext>, report: StatisticsReport, snapshot: StatisticsSnapshot, caption: string) {
+  const chatId = Number(report.recipientId);
+  if (snapshot.monthlyChart) {
+    let photo: Buffer | undefined;
+    try {
+      photo = await renderStatisticsChart(snapshot.monthlyChart, snapshot.cutoff, snapshot.timezone);
+    } catch (error) {
+      logger.error({ err: error, reportId: report.id }, "Statistics chart rendering failed");
+    }
+    if (photo) {
+      try {
+        return await bot.api.sendPhoto(chatId, new InputFile(photo, "statistics.png"), { caption }, telegramTimeout(20_000));
+      } catch (error) {
+        // Only a definite rejection of the photo justifies another send.
+        if (!(error instanceof GrammyError) || error.error_code !== 400) throw error;
+        logger.warn({ description: error.description, reportId: report.id }, "Statistics photo rejected");
+      }
+    }
+  }
+  return bot.api.sendMessage(chatId, caption, {}, telegramTimeout(20_000));
+}
+
 export const deliverStatisticsReport = async (bot: Bot<BotContext>, report: StatisticsReport): Promise<void> => {
   const snapshot = report.snapshot ? report.snapshot as unknown as StatisticsSnapshot
     : await buildStatisticsSnapshot(DateTime.fromJSDate(report.cutoffAt).setZone(report.timezone));
@@ -65,10 +88,10 @@ export const deliverStatisticsReport = async (bot: Bot<BotContext>, report: Stat
     }, AbortSignal.timeout(20_000));
   } catch (error) {
     // A transport failure is ambiguous: Telegram may have accepted the widget.
-    logger.warn({ err: error, reportId: report.id, ambiguous: !(error instanceof GrammyError) }, "Widget delivery failed; sending text fallback");
+    logger.warn({ reason: error instanceof Error ? error.message : String(error), reportId: report.id, ambiguous: !(error instanceof GrammyError) }, "Widget delivery failed; sending report fallback");
     state = "FALLBACK";
     try {
-      result = await bot.api.sendMessage(Number(report.recipientId), caption, {}, telegramTimeout(20_000));
+      result = await sendReportFallback(bot, report, snapshot, caption);
     } catch (fallbackError) {
       await prisma.statisticsReport.update({ where: { id: report.id }, data: { state: "UNCERTAIN" } });
       throw fallbackError;

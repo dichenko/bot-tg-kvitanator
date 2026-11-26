@@ -27,7 +27,7 @@
 | Свой логотип / подпись на квитанции (брендинг) | `branding:*` | `handlers/branding.ts` | `max/subscription.ts` (branding: и handleMaxBrandingInput) | `services/brandingService.ts`, `brandingStorage.ts`, `packages/shared/src/branding.ts`; вид — `receipt.hbs`; детали — `docs/receipt-branding-pilot.md` |
 | Поддержка (написать автору бота) | `support:open` | `handlers/subscription.ts` | `max/subscription.ts` (handleMaxSupportInput) | `services/supportService.ts` |
 | «Синхронизировать Max и TG» (пока заглушка) | `sub:sync` | `handlers/subscription.ts` | `max/subscription.ts` | — |
-| Статистика для админа, /stats, ежедневный отчёт | `/stats` | `handlers/statistics.ts` | — | `statisticsService.ts`, `statisticsWidget.ts`, `dailyStatsService.ts`, `telegramWidgetApi.ts`; `docs/interactive-statistics.md` |
+| Статистика для админа, /stats, ежедневный отчёт, картинка с графиком за месяц | `/stats` | `handlers/statistics.ts` | — | `statisticsService.ts`, `statisticsChart.ts`, `statisticsWidget.ts`, `dailyStatsService.ts`, `telegramWidgetApi.ts`; `docs/interactive-statistics.md` |
 | Что-то со вебхуками, запуском, health | — | `apps/bot/src/index.ts` | `max/webhook.ts`, `max/client.ts` | `config.ts` (env-переменные) |
 | Деплой, сервер, GitHub Actions | — | — | — | `.github/workflows/deploy.yml`, `scripts/deploy*.sh`, `docs/deployment.md` |
 | Таблицы БД, новое поле | — | — | — | `packages/db/prisma/schema.prisma` + новая миграция в `packages/db/prisma/migrations/` |

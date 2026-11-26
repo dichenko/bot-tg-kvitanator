@@ -23,7 +23,7 @@ RUN pnpm --filter @receipt-bot/bot build
 
 FROM node:20-bookworm-slim AS runtime
 WORKDIR /app
-RUN apt-get update -y && apt-get install -y --no-install-recommends openssl ca-certificates curl \
+RUN apt-get update -y && apt-get install -y --no-install-recommends openssl ca-certificates curl fonts-dejavu-core \
   && curl -fsSL https://gu-st.ru/content/lending/russian_trusted_root_ca_pem.crt -o /usr/local/share/ca-certificates/russian-trusted-root-ca.crt \
   && curl -fsSL https://gu-st.ru/content/lending/russian_trusted_sub_ca_pem.crt -o /usr/local/share/ca-certificates/russian-trusted-sub-ca.crt \
   && update-ca-certificates \

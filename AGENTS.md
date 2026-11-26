@@ -19,7 +19,7 @@ Node 20+, TypeScript, pnpm-монорепо (`pnpm@10.11.0`), grammY, MAX Bot AP
   - `index.ts` — старт: webhook/polling, планировщики, MAX-вебхук. `bot.ts` — сборка grammY-бота и порядок регистрации хендлеров. `config.ts` — env (zod).
   - `handlers/` — Telegram: `commands`, `messages`, `callbacks`, `statistics`, `branding`, `subscription`. `keyboards/index.ts`.
   - `max/` — то же для MAX: `client`, `context`, `handlers`, `keyboards`, `subscription`, `types`, `webhook`.
-  - `services/` — бизнес-логика, общая для каналов: `operationService`, `userService`, `exportService`, `rendererClient`, `statisticsService`/`statisticsWidget`/`dailyStatsService`, `brandingService`/`brandingStorage`, `subscriptionService`, `supportService`, `timeZoneService`.
+  - `services/` — бизнес-логика, общая для каналов: `operationService`, `userService`, `exportService`, `rendererClient`, `statisticsService`/`statisticsWidget`/`statisticsChart`/`dailyStatsService`, `brandingService`/`brandingStorage`, `subscriptionService`, `supportService`, `timeZoneService`.
   - `utils/` (`formatters`, `state`, `telegram`, `validation`), `types.ts`.
 - `apps/renderer-worker/src/` — HTTP-сервис рендера: `renderReceipt.ts`, `receiptPayload.ts`, шаблон `templates/receipt.hbs`.
 - `packages/db/` — Prisma: `prisma/schema.prisma` (166 стр.), `prisma/migrations/`, клиент `src/prisma.ts`.

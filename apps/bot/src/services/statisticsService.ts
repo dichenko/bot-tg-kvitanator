@@ -6,6 +6,7 @@ export type StatsPeriod = typeof PERIODS[number];
 export type ChartChannel = "all" | "tg" | "max";
 export type ChannelCounts = { total: number; telegram: number; max: number; unknown: number; overlap: number };
 export type StatsBucket = { from: string; to: string; telegram: number; max: number; unknown: number };
+export type MonthChartDay = { date: string; users: number; active: number; receipts: number };
 export type PeriodStatistics = {
   from: string;
   to: string;
@@ -19,6 +20,7 @@ export type StatisticsSnapshot = {
   cutoff: string;
   timezone: string;
   periods: Record<StatsPeriod, PeriodStatistics>;
+  monthlyChart?: MonthChartDay[]; // Older saved reports contain only period aggregates.
 };
 
 export const periodBounds = (period: StatsPeriod, cutoff: DateTime): DateTime[] => {
@@ -93,11 +95,39 @@ export const aggregatePeriod = async (
   };
 };
 
+const aggregateMonthlyChart = async (tx: Prisma.TransactionClient, cutoff: DateTime): Promise<MonthChartDay[]> => {
+  const lastDay = cutoff.minus({ milliseconds: 1 }).startOf("day");
+  const firstDay = lastDay.minus({ days: 29 });
+  const days = Array.from({ length: 30 }, (_, i) => firstDay.plus({ days: i }));
+  const bounds = Prisma.join(days.map((day, i) => {
+    const end = days[i + 1] ?? cutoff;
+    return Prisma.sql`(${i}::int, ${day.toJSDate()}::timestamp, ${end.toJSDate()}::timestamp)`;
+  }));
+  const rows = await tx.$queryRaw<{ day: number; users: bigint; active: bigint; receipts: bigint }[]>(Prisma.sql`
+    WITH bounds(day, lo, hi) AS (VALUES ${bounds})
+    SELECT day, ((SELECT count(*) FROM users WHERE "createdAt" < ${firstDay.toJSDate()}) +
+      sum(registrations.n) OVER (ORDER BY day))::bigint AS users, issued.active, issued.receipts
+    FROM bounds
+    CROSS JOIN LATERAL (
+      SELECT count(*) AS n FROM users WHERE "createdAt" >= lo AND "createdAt" < hi
+    ) registrations
+    CROSS JOIN LATERAL (
+      SELECT count(DISTINCT "userId") AS active, count(*) AS receipts FROM operations
+      WHERE status = 'SENT' AND COALESCE("sentAt", "createdAt") >= lo AND COALESCE("sentAt", "createdAt") < hi
+    ) issued
+    ORDER BY day
+  `);
+  return rows.map(row => ({
+    date: days[row.day].toISODate()!, users: Number(row.users), active: Number(row.active), receipts: Number(row.receipts)
+  }));
+};
+
 export const buildStatisticsSnapshot = async (cutoff: DateTime): Promise<StatisticsSnapshot> =>
   prisma.$transaction(async tx => {
     const periods = {} as Record<StatsPeriod, PeriodStatistics>;
     for (const period of PERIODS) periods[period] = await aggregatePeriod(tx, period, cutoff);
-    return { version: 1, cutoff: cutoff.toUTC().toISO()!, timezone: cutoff.zoneName!, periods };
+    const monthlyChart = await aggregateMonthlyChart(tx, cutoff);
+    return { version: 1, cutoff: cutoff.toUTC().toISO()!, timezone: cutoff.zoneName!, periods, monthlyChart };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead, timeout: 30_000 });
 
 export const formatStatsText = (snapshot: StatisticsSnapshot): string => {
